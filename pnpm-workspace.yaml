@@ -1,7 +1,9 @@
 minimumReleaseAgeExclude:
   - astro@6.3.5
+  - shadcn@4.8.0
 
 allowBuilds:
   esbuild: true
   lefthook: true
+  msw: true
   sharp: true
