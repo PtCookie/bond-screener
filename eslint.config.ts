@@ -6,6 +6,7 @@ import globals from 'globals';
 import tsEslint from 'typescript-eslint';
 import pluginAstro from 'eslint-plugin-astro';
 import pluginReact from '@eslint-react/eslint-plugin';
+import pluginVitest from '@vitest/eslint-plugin'
 
 export default defineConfig([
   includeIgnoreFile(resolve(import.meta.dirname, '.gitignore')),
@@ -21,6 +22,10 @@ export default defineConfig([
   {
     files: ['**/*.{jsx,tsx}'],
     ...pluginReact.configs.strict
+  },
+  {
+    files: ['tests/**'],
+    ...pluginVitest.configs.recommended
   },
   {
     ...stylistic.configs.customize({ semi: true }),
