@@ -1,9 +1,12 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
-import tailwindcss from "@tailwindcss/vite";
-
 import cloudflare from "@astrojs/cloudflare";
+import tailwindcss from "@tailwindcss/vite";
+import { env } from "node:process";
+
+// Workaround for Vitest
+const isVitest = !!env.VITEST;
 
 // https://astro.build/config
 export default defineConfig({
@@ -15,5 +18,5 @@ export default defineConfig({
     plugins: [tailwindcss()],
   },
 
-  adapter: cloudflare(),
+  adapter: isVitest ? undefined : cloudflare(),
 });
