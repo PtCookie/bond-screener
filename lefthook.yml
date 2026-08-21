@@ -3,22 +3,20 @@
 pre-commit:
   parallel: true
   commands:
-    check:
-      run: pnpm exec eslint --fix {staged_files} && pnpm exec prettier --write {staged_files}
-      glob: "*.{js,jsx,ts,tsx,astro}"
-      stage_fixed: true
-    check-js:
+    check-types:
+      glob: "*.{js,mjs,ts,tsx}"
+      run: pnpm exec tsc --noEmit
+    eslint:
+      glob: "*.{js,cjs,mjs,ts,tsx,astro}"
       run: pnpm exec eslint --fix {staged_files}
-      glob: "*.{mjs,cjs}"
       stage_fixed: true
-    format-json:
+    prettier:
+      glob: "*.{js,ts,tsx,astro,css,json}"
       run: pnpm exec prettier --write {staged_files}
-      glob: "*.json"
       stage_fixed: true
 
 pre-push:
   commands:
-    check-types:
-      run: pnpm exec tsc --noEmit
-    test:
-      run: pnpm run test
+    vitest:
+      glob: "*.{js,cjs,mjs,ts,tsx,astro}"
+      run: pnpm test --run
