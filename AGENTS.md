@@ -88,7 +88,7 @@ src/
 
 - 인증: 쿼리스트링 `serviceKey` (공공데이터포털에서 발급받은 인증키, Decoded 값을 `URLSearchParams`에 넣을 것 — 이중 인코딩 주의)
 - `resultType` 기본값은 **`xml`**. JSON 응답을 원하면 매 요청에 `resultType=json`을 명시해야 한다.
-- **오류도 HTTP 200으로 응답한다.** 반드시 `response.header.resultCode === "00"`을 확인할 것.
+- **API 레벨 오류는 HTTP 200으로 응답한다.** 반드시 `response.header.resultCode === "00"`을 확인할 것. **단 GW 레벨 오류(`serviceKey` 누락·미등록·만료 등)는 HTTP 200이 아니며(401/403 등) `{"OpenAPI_ServiceResponse":{"cmmMsgHeader":{...}}}` 형태의 별도 봉투로 온다** — Swagger·docx 미문서화, 실호출로 확인됨. 타입은 `src/api/common.ts`의 `OpenApiGatewayErrorResponse`, 상세는 `docs/api/README.md`의 "공통 응답 규약" 참고.
 - **에러코드는 docx 발행 이후 포털에서 개편되었다.** 현행 코드(`01/04/05/10/12/20×3/22/23/29/30/31`)와 docx의 레거시 코드(`1/10/12/20/22/30/31/32/99`)가 다르므로 반드시 `docs/api/README.md`의 현행 표를 기준으로 판단할 것. 특히 `20`이 서로 다른 메시지 3개에 중복 배정되어 있어 `resultCode`만으로는 분기할 수 없고 `resultMsg`를 함께 봐야 하며, `23`(초당 호출 초과)이 신설되었다.
 - 응답 봉투: `response.header{resultCode,resultMsg}` + `response.body{numOfRows,pageNo,totalCount,items.item[]}`. **조회 결과가 0건이면 `items`가 객체가 아니라 빈 문자열(`""`)로 온다.**
 - 페이징: `pageNo`, `numOfRows`. 제한: 30 TPS, 개발계정 일 10,000건, 최대 메시지 4000 byte, 평균 응답 500ms

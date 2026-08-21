@@ -26,8 +26,23 @@
 
 ## 공통 응답 규약
 
-- **오류도 HTTP 200으로 응답한다.** 반드시 `response.header.resultCode === "00"`을 확인할 것.
-- 응답 봉투: `response.header{resultCode,resultMsg}` + `response.body{numOfRows,pageNo,totalCount,items.item[]}`
+- **API 레벨 오류는 HTTP 200으로 응답한다.** 반드시 `response.header.resultCode === "00"`을 확인할 것.
+- **단, GW(게이트웨이) 레벨 오류는 HTTP 200이 아니며 완전히 다른 봉투로 온다.** `serviceKey` 누락·미등록·만료 등 인증 단계에서 요청이 거부되면, 관찰된 HTTP 상태(401, 403 등)와 함께 아래 형태로 응답한다. **이 형태는 Swagger·docx 어디에도 문서화되어 있지 않고 실호출로만 확인됐다.**
+
+  ```json
+  {
+    "OpenAPI_ServiceResponse": {
+      "cmmMsgHeader": {
+        "errMsg": "SERVICE_KEY_IS_NULL",
+        "returnAuthMsg": "서비스 접근거부",
+        "returnReasonCode": "20"
+      }
+    }
+  }
+  ```
+
+  `errMsg`/`returnReasonCode`는 아래 "에러코드" 절의 `메시지`/`코드`와 같은 값 공간을 쓴다(단 `returnAuthMsg`는 아래 표의 `설명` 문구와 정확히 일치하지 않을 수 있어 분기 로직에는 쓰지 말 것). 클라이언트는 응답을 파싱하기 전에 HTTP 상태를 먼저 확인해야 한다. 타입은 `src/api/common.ts`의 `OpenApiGatewayErrorResponse` 참고.
+- 정상/API 레벨 오류 응답 봉투: `response.header{resultCode,resultMsg}` + `response.body{numOfRows,pageNo,totalCount,items.item[]}`
 - **조회 결과가 0건이면 `items`가 객체가 아니라 빈 문자열(`""`)로 온다.** `items.item`에 바로 접근하지 말고 타입 가드를 거칠 것 (`src/api/common.ts`의 `OpenApiBody.items: { item: T[] } | ""` 참고).
 - 모든 응답 필드는 기본적으로 **문자열**이며, 빈 값은 `""` 또는 문자열 `"NULL"`로 온다. 단, **채권시세정보의 가격·수익률·거래량 계열 11개 필드는 Swagger 스키마상 `number`(JSON 기준)로 선언되어 있다.** 실제 파싱·정규화 처리는 `src/api/` 타입이 아니라 이 타입을 사용하는 클라이언트 계층의 책임이다.
 

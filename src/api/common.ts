@@ -62,6 +62,27 @@ export interface OpenApiResponse<TItem> {
   body: OpenApiBody<TItem>;
 }
 
+/**
+ * GW(게이트웨이) 레벨 오류 응답 봉투. `OpenApiResponse`(`response.header`/`response.body`)와는
+ * 완전히 다른 형태이며, HTTP 상태 코드도 200이 아니다(실호출로 관찰된 값: 401, 403 등).
+ * `serviceKey` 누락·미등록·만료 등 인증 단계에서 요청이 거부되면 이 형태로 온다.
+ *
+ * Swagger·docx 어디에도 문서화되어 있지 않고 실호출로만 확인된 봉투다.
+ * 자세한 내용은 `docs/api/README.md`의 "공통 응답 규약" 절 참고.
+ */
+export interface OpenApiGatewayErrorResponse {
+  OpenAPI_ServiceResponse: {
+    cmmMsgHeader: {
+      /** {@link OPEN_API_RESULT_CODES}의 `message`와 같은 값 공간 (예: `"SERVICE_KEY_IS_NULL"`) */
+      errMsg: string;
+      /** GW가 붙이는 한글 설명. `docs/api/README.md` 에러코드 표의 `description` 문구와 정확히 일치하지 않을 수 있으므로 분기 로직에는 쓰지 말 것 */
+      returnAuthMsg: string;
+      /** {@link OPEN_API_RESULT_CODES}의 `code`와 같은 값 공간 (예: `"20"`) */
+      returnReasonCode: string;
+    };
+  };
+}
+
 /** 에러코드가 속한 분류. `legacy`는 docx 원본(2020~2021년 발행) 기준이며 현재는 사용되지 않는다. */
 export type OpenApiResultCodeKind = "general" | "auth" | "legacy";
 
