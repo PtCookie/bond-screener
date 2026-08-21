@@ -57,7 +57,7 @@ pnpm prepare          # lefthook 설치 (최초 세팅 시 자동 실행됨)
 ### Cloudflare 배포
 
 `@astrojs/cloudflare` 어댑터 사용, `astro.config.mjs`에서 `output: "server"` 설정 완료. `wrangler.jsonc`의 `main`이 어댑터 entrypoint를 직접 가리키므로 별도 Workers 진입점 파일은 없다. 시크릿(`serviceKey` 등)은 `Astro.locals.runtime.env` 또는 `import.meta.env`로 접근한다.
-- **로컬 개발**(`pnpm dev`/`wrangler dev`): 프로젝트 루트에 `.dev.vars` 또는 `.env` 파일에 `KEY="VALUE"` 형식으로 넣는다. **둘 중 하나만 사용할 것** — `.dev.vars`가 존재하면 `.env`의 값은 무시된다.
+- **로컬 개발**(`pnpm dev`/`wrangler dev`): 프로젝트 루트에 `.dev.vars` 또는 `.env` 파일에 `KEY="VALUE"` 형식으로 넣는다. **둘 중 하나만 사용할 것** — `.dev.vars`가 존재하면 `.env`의 값은 무시된다. 오픈API 인증키는 `BOND_API_SERVICE_KEY`라는 이름으로 넣는다(`.claude/skills/probe-bond-api`가 이 이름을 찾는다).
 - **배포**(`wrangler deploy`): `.dev.vars`/`.env`는 로컬 전용이라 배포된 Worker에는 전달되지 않는다. 반드시 `wrangler secret put <NAME>`으로 Cloudflare 플랫폼에 시크릿을 등록해야 하며, `wrangler deploy`는 그 등록된 값을 그대로 바인딩한다.
 - `.dev.vars`, `.env`는 커밋 금지 (`.gitignore`에 `.dev.vars*`, `.env*` 패턴으로 등록됨).
 - 바인딩 타입을 바꾼 뒤에는 `pnpm generate-types`로 `worker-configuration.d.ts`를 갱신한다.
