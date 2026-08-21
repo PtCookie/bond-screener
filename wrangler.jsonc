@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bond-screener",
+  // @astrojs/cloudflare 어댑터의 entrypoint를 직접 가리킨다 (별도 Workers 진입점 파일 없음)
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-05-21",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./dist",
+  },
+  "observability": {
+    "enabled": true,
+  },
+}
