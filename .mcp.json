@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "Cloudflare Documentation": {
+            "type": "http",
+            "url": "https://docs.mcp.cloudflare.com/mcp"
+        },
+        "Astro docs": {
+            "type": "http",
+            "url": "https://mcp.docs.astro.build/mcp"
+        },
+        "playwright": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest"]
+        }
+    }
+}

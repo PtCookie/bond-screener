@@ -1,1 +1,9 @@
+.agents/
+.claude/
+skills-lock.json
+
+*.md
 pnpm-lock.yaml
+
+worker-configuration.d.ts
+wrangler.jsonc
