@@ -5,6 +5,7 @@ import globals from "globals";
 import tsEslint from "typescript-eslint";
 import pluginAstro from "eslint-plugin-astro";
 import pluginReact from "@eslint-react/eslint-plugin";
+import pluginQuery from "@tanstack/eslint-plugin-query";
 import pluginVitest from "@vitest/eslint-plugin";
 
 export default defineConfig([
@@ -19,5 +20,6 @@ export default defineConfig([
   tsEslint.configs.stylistic,
   pluginAstro.configs.recommended,
   { files: ["**/*.{jsx,tsx}"], ...pluginReact.configs.strict },
+  ...pluginQuery.configs["flat/recommended-strict"],
   { files: ["tests/**"], ...pluginVitest.configs.recommended },
 ]);

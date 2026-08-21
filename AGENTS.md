@@ -38,11 +38,10 @@ pnpm prepare          # lefthook 설치 (최초 세팅 시 자동 실행됨)
 - **React 19** — Astro Islands로 인터랙티브 컴포넌트
 - **shadcn/ui** (`@base-ui/react` 기반, Phosphor 아이콘) — UI 컴포넌트 라이브러리 (`src/components/ui/`)
 - **Tailwind v4** — `@tailwindcss/vite` 플러그인
+- **TanStack Query v5** (`@tanstack/react-query`) — 클라이언트 사이드 서버 상태 관리. `@tanstack/eslint-plugin-query`가 `eslint.config.ts`에 연결되어 있음. 의존성만 추가된 상태로 `src/`에 실제 사용처(`QueryClientProvider` 등)는 아직 없음 — 도입 시 이 문서의 데이터 페칭 패턴 절을 갱신할 것
 - **Cloudflare Workers** — 배포 플랫폼. `@astrojs/cloudflare` 어댑터 이미 설정됨
 - **Vitest** — 단위/통합 테스트
 - **ESLint** / **Prettier** — 린팅 / 포매팅
-
-서버 상태 관리 라이브러리(TanStack Query 등)는 아직 도입되지 않았다. 필요해지면 `pnpm add`로 추가하고 이 문서를 갱신할 것.
 
 ## Architecture
 
