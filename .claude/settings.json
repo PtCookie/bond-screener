@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+      "WebFetch(domain:apis.data.go.kr)",
       "Bash(pnpm install)",
       "Bash(pnpm dev:*)",
       "Bash(pnpm build:*)",
@@ -12,6 +13,35 @@
       "Bash(git log:*)",
       "Bash(git diff:*)",
       "Bash(git status)"
+    ]
+  },
+  "sandbox": {
+    "network": {
+      "allowedDomains": ["apis.data.go.kr"]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-secret-files.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/remind-generate-types.sh\""
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
