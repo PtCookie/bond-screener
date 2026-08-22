@@ -42,7 +42,7 @@
   ```
 
   `errMsg`/`returnReasonCode`는 아래 "에러코드" 절의 `메시지`/`코드`와 같은 값 공간을 쓴다(단 `returnAuthMsg`는 아래 표의 `설명` 문구와 정확히 일치하지 않을 수 있어 분기 로직에는 쓰지 말 것). 클라이언트는 응답을 파싱하기 전에 HTTP 상태를 먼저 확인해야 한다. 타입은 `src/api/common.ts`의 `OpenApiGatewayErrorResponse` 참고.
-- 정상/API 레벨 오류 응답 봉투: `response.header{resultCode,resultMsg}` + `response.body{numOfRows,pageNo,totalCount,items.item[]}`
+- 정상/API 레벨 오류 응답 봉투: `response.header{resultCode,resultMsg}` + `response.body{numOfRows,pageNo,totalCount,items.item[]}`. 최상위 `response` 키를 포함한 전체 형태는 `src/api/common.ts`의 `OpenApiEnvelope<TItem>` 참고 — `OpenApiResponse<TItem>`은 `response` 키 안쪽(`header`/`body`)만 표현한다.
 - **조회 결과가 0건이면 `items`가 객체가 아니라 빈 문자열(`""`)로 온다.** `items.item`에 바로 접근하지 말고 타입 가드를 거칠 것 (`src/api/common.ts`의 `OpenApiBody.items: { item: T[] } | ""` 참고).
 - 모든 응답 필드는 기본적으로 **문자열**이며, 빈 값은 `""` 또는 문자열 `"NULL"`로 온다. 단, **채권시세정보의 가격·수익률·거래량 계열 11개 필드는 Swagger 스키마상 `number`(JSON 기준)로 선언되어 있다.** 실제 파싱·정규화 처리는 `src/api/` 타입이 아니라 이 타입을 사용하는 클라이언트 계층의 책임이다.
 

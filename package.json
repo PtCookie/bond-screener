@@ -25,7 +25,11 @@
         "format": "prettier --write .",
         "test": "vitest",
         "generate-types": "wrangler types",
-        "deploy": "astro build && wrangler deploy"
+        "deploy": "astro build && wrangler deploy",
+        "db:migrate": "wrangler d1 migrations apply bond-screener --remote --config ./wrangler.jsonc",
+        "db:migrate:local": "wrangler d1 migrations apply bond-screener --local --config ./wrangler.jsonc",
+        "backfill": "node scripts/backfill.mjs",
+        "snapshot": "node scripts/build-snapshot.mjs"
     },
     "dependencies": {
         "@astrojs/cloudflare": "^14.1.3",

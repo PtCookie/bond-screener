@@ -1,0 +1,77 @@
+{
+    "response": {
+        "header": {
+            "resultCode": "00",
+            "resultMsg": "NORMAL SERVICE."
+        },
+        "body": {
+            "numOfRows": "3",
+            "pageNo": "1",
+            "totalCount": "332",
+            "items": {
+                "item": [
+                    {
+                        "basDt": "20260820",
+                        "srtnCd": "C03501GG3",
+                        "isinCd": "KR103501GG39",
+                        "itmsNm": "국고03500-5603(26-2)",
+                        "mrktCtg": "KTS",
+                        "xpYrCnt": "30",
+                        "itmsCtg": "지표",
+                        "clprPrc": "8283",
+                        "clprVs": "58",
+                        "clprBnfRt": "4.675",
+                        "mkpPrc": "8258",
+                        "mkpBnfRt": "4.693",
+                        "hiprPrc": "8305",
+                        "hiprBnfRt": "4.659",
+                        "loprPrc": "8242",
+                        "loprBnfRt": "4.705",
+                        "trqu": "685000000000",
+                        "trPrc": "567000200000"
+                    },
+                    {
+                        "basDt": "20260820",
+                        "srtnCd": "C01501DBA",
+                        "isinCd": "KR101501DBA5",
+                        "itmsNm": "국민주택1종21-10",
+                        "mrktCtg": "일반채권",
+                        "xpYrCnt": " ",
+                        "itmsCtg": " ",
+                        "clprPrc": "10437",
+                        "clprVs": "0",
+                        "clprBnfRt": "3.545",
+                        "mkpPrc": "10437",
+                        "mkpBnfRt": "3.545",
+                        "hiprPrc": "10437",
+                        "hiprBnfRt": "3.545",
+                        "loprPrc": "10437",
+                        "loprBnfRt": "3.545",
+                        "trqu": "160000",
+                        "trPrc": "166992"
+                    },
+                    {
+                        "basDt": "20260820",
+                        "srtnCd": "C01501DG7",
+                        "isinCd": "KR101501DG77",
+                        "itmsNm": "국민주택1종26-07",
+                        "mrktCtg": "소액채권",
+                        "xpYrCnt": " ",
+                        "itmsCtg": " ",
+                        "clprPrc": "8545",
+                        "clprVs": "10",
+                        "clprBnfRt": "4.273",
+                        "mkpPrc": "8548.5",
+                        "mkpBnfRt": "4.264",
+                        "hiprPrc": "8548.5",
+                        "hiprBnfRt": "4.264",
+                        "loprPrc": "8540.5",
+                        "loprBnfRt": "4.284",
+                        "trqu": "2671526000",
+                        "trPrc": "2282801515"
+                    }
+                ]
+            }
+        }
+    }
+}

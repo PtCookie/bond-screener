@@ -63,6 +63,16 @@ export interface OpenApiResponse<TItem> {
 }
 
 /**
+ * 두 API의 최상위 응답 봉투. 실제 JSON은 `{"response": {header, body}}` 형태로
+ * `response` 키 한 겹이 더 있으며, `docs/api/README.md`의 "공통 응답 규약"도
+ * `response.header`/`response.body`로 기술한다. fetch 클라이언트는 이 타입으로
+ * 응답을 파싱한 뒤 `.response`를 꺼내 쓴다.
+ */
+export interface OpenApiEnvelope<TItem> {
+  response: OpenApiResponse<TItem>;
+}
+
+/**
  * GW(게이트웨이) 레벨 오류 응답 봉투. `OpenApiResponse`(`response.header`/`response.body`)와는
  * 완전히 다른 형태이며, HTTP 상태 코드도 200이 아니다(실호출로 관찰된 값: 401, 403 등).
  * `serviceKey` 누락·미등록·만료 등 인증 단계에서 요청이 거부되면 이 형태로 온다.

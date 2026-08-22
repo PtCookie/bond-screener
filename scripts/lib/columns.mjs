@@ -1,0 +1,111 @@
+// src/lib/bond/columns.ts와 동일한 컬럼 순서 (스크립트는 TS를 import할 수 없어 중복).
+// migrations/0001_init.sql의 CREATE TABLE 순서와 반드시 1:1 일치해야 한다.
+// 고치면 반드시 src/lib/bond/columns.ts와 migrations/0001_init.sql도 같이 확인할 것.
+
+export const BOND_COLUMNS = [
+  "isin_cd",
+  "crno",
+  "isin_cd_nm",
+  "bond_isur_nm",
+  "srtn_cd",
+  "itms_nm",
+  "sic_nm",
+  "scrs_itms_kcd",
+  "bond_issu_cur_cd",
+  "bond_issu_dt",
+  "bond_expr_dt",
+  "lstg_dt",
+  "bond_srfc_inrt",
+  "irt_chng_dcd_nm",
+  "grn_dcd",
+  "bond_rnkn_dcd",
+  "optn_tcd",
+  "pclr_bond_kcd",
+  "bond_offr_mcd",
+  "txtn_dcd",
+  "pamt_rdpt_mcd",
+  "bond_int_tcd",
+  "int_cmpu_mcd",
+  "bond_reg_inst_dcd",
+  "rgt_exert_mnbd_dcd",
+  "bnk_hldy_int_pydy_dcd",
+  "sttr_hldy_int_pydy_dcd",
+  "int_pay_mmnt_dcd",
+  "int_pay_cycl_ctt",
+  "bond_issu_amt",
+  "bond_pymt_amt",
+  "strips_psbl_yn",
+  "strips_nm",
+  "pris_lnkg_bond_yn",
+  "crfnd_yn",
+  "prmnc_bond_yn",
+  "qib_trgt_scrt_yn",
+  "elps_int_pay_yn",
+  "piam_pay_inst_nm",
+  "piam_pay_brof_nm",
+  "issu_dpty_nm",
+  "bond_undt_inst_nm",
+  "bond_grn_inst_nm",
+  "cpbd_mng_cmpy_nm",
+  "first_seen_bas_dt",
+  "last_chg_bas_dt",
+  "fp",
+];
+
+export const BOND_FINGERPRINT_COLUMNS = BOND_COLUMNS.filter(
+  (c) => !["isin_cd", "srtn_cd", "itms_nm", "first_seen_bas_dt", "last_chg_bas_dt", "fp"].includes(c),
+);
+
+export const BOND_STATE_COLUMNS = [
+  "isin_cd",
+  "valid_from",
+  "valid_to",
+  "bond_bal",
+  "nxtm_copn_dt",
+  "rbf_copn_dt",
+  "kis_grade",
+  "kbp_grade",
+  "nice_grade",
+  "fn_grade",
+];
+
+export const BOND_PRICE_COLUMNS = [
+  "isin_cd",
+  "bas_dt",
+  "mrkt_ctg",
+  "clpr_prc",
+  "clpr_vs",
+  "clpr_bnf_rt",
+  "mkp_prc",
+  "mkp_bnf_rt",
+  "hipr_prc",
+  "hipr_bnf_rt",
+  "lopr_prc",
+  "lopr_bnf_rt",
+  "trqu",
+  "tr_prc",
+  "xp_yr_cnt",
+  "itms_ctg",
+];
+
+export const CODE_LABEL_COLUMNS = ["domain", "code", "label"];
+
+/** bond 컬럼명 → 원본 API 코드 필드명(camelCase). 라벨(*Nm)은 code_label로 분리된 16쌍. */
+export const CODE_LABEL_DOMAINS = {
+  scrs_itms_kcd: "scrsItmsKcd",
+  bond_issu_cur_cd: "bondIssuCurCd",
+  grn_dcd: "grnDcd",
+  bond_rnkn_dcd: "bondRnknDcd",
+  optn_tcd: "optnTcd",
+  pclr_bond_kcd: "pclrBondKcd",
+  bond_offr_mcd: "bondOffrMcd",
+  txtn_dcd: "txtnDcd",
+  pamt_rdpt_mcd: "pamtRdptMcd",
+  bond_int_tcd: "bondIntTcd",
+  int_cmpu_mcd: "intCmpuMcd",
+  bond_reg_inst_dcd: "bondRegInstDcd",
+  rgt_exert_mnbd_dcd: "rgtExertMnbdDcd",
+  bnk_hldy_int_pydy_dcd: "bnkHldyIntPydyDcd",
+  sttr_hldy_int_pydy_dcd: "sttrHldyIntPydyDcd",
+  int_pay_mmnt_dcd: "intPayMmntDcd",
+};

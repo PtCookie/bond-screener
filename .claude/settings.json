@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:apis.data.go.kr)",
+      "WebFetch(domain:api.cloudflare.com)",
       "Bash(pnpm install)",
       "Bash(pnpm dev:*)",
       "Bash(pnpm build:*)",
@@ -14,11 +15,6 @@
       "Bash(git diff:*)",
       "Bash(git status)"
     ]
-  },
-  "sandbox": {
-    "network": {
-      "allowedDomains": ["apis.data.go.kr"]
-    }
   },
   "hooks": {
     "PreToolUse": [
@@ -43,6 +39,19 @@
         ]
       }
     ]
+  },
+  "sandbox": {
+    "excludedCommands": [
+      "pnpm dev *",
+      "pnpm exec wrangler *"
+    ],
+    "network": {
+      "allowLocalBinding": true,
+      "allowedDomains": [
+        "apis.data.go.kr",
+        "api.cloudflare.com"
+      ]
+    }
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true

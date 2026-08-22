@@ -26,3 +26,7 @@ pnpm-debug.log*
 
 # Cloudflare Wrangler
 .wrangler/
+
+# 초기 백필 스크립트(scripts/backfill.mjs)의 중간 산출물 — 원본 응답·생성 SQL·재개 상태.
+# 용량이 크고(수백 MB) 재생성 가능하므로 커밋하지 않는다.
+.backfill/
