@@ -10,6 +10,7 @@
       "Bash(pnpm format:*)",
       "Bash(pnpm test:*)",
       "Bash(pnpm exec astro:*)",
+      "Bash(pnpm exec wrangler:*)",
       "Bash(lefthook:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",

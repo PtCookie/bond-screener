@@ -19,7 +19,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { PROJECT_ROOT, loadServiceKey } from "./lib/env.mjs";
-import { readDatabaseName } from "./lib/wrangler-config.mjs";
+import { readDatabaseName, WRANGLER_ENV } from "./lib/wrangler-config.mjs";
 import {
   fetchPage,
   ISSU_BASE_URL,
@@ -393,7 +393,7 @@ function executeSqlFile(databaseName, target, filePath) {
       "--json",
       "-y",
     ],
-    { cwd: PROJECT_ROOT, encoding: "utf8" },
+    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
   );
   // wrangler --json은 배열([{results, success, meta}])을 stdout에 찍지만 그 앞뒤로
   // 프록시/텔레메트리 경고 등 비-JSON 라인이 섞여 나올 수 있어 첫 '['부터 파싱한다.

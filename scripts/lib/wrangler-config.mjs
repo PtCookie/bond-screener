@@ -22,3 +22,7 @@ export function readDatabaseName() {
 export function readBucketName() {
   return readWranglerConfig().r2_buckets?.[0]?.bucket_name;
 }
+
+// wrangler 서브프로세스를 샌드박스 안에서 호출하면 텔레메트리 전송(sparrow.cloudflare.com)이
+// 네트워크 정책에 막혀 명령 자체가 실패한다 — 애초에 전송을 끄면 이 실패를 피할 수 있다.
+export const WRANGLER_ENV = { ...process.env, WRANGLER_SEND_METRICS: "false" };

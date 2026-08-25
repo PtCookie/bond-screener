@@ -16,7 +16,7 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PROJECT_ROOT } from "./lib/env.mjs";
-import { readDatabaseName, readBucketName } from "./lib/wrangler-config.mjs";
+import { readDatabaseName, readBucketName, WRANGLER_ENV } from "./lib/wrangler-config.mjs";
 
 // 스크리너 목록에 필요한 18필드. code_label로 뺀 코드는 별도 조인 없이 스냅샷 헤더에
 // 라벨 사전을 통째로 실어 클라이언트에서 매핑한다.
@@ -54,7 +54,7 @@ function wranglerD1Query(sql, target) {
       "--command",
       sql,
     ],
-    { cwd: PROJECT_ROOT, encoding: "utf8" },
+    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
   );
   const parsed = JSON.parse(out);
   return parsed[0]?.results ?? [];
@@ -129,7 +129,7 @@ async function main() {
       "--content-encoding=gzip",
       "--content-type=application/json",
     ],
-    { cwd: PROJECT_ROOT, stdio: "inherit" },
+    { cwd: PROJECT_ROOT, stdio: "inherit", env: WRANGLER_ENV },
   );
 
   // index.json 갱신 — 시세 델타는 이 basDt 이전 것들을 정리(base가 이미 그 시점을 반영)
@@ -139,7 +139,7 @@ async function main() {
     const existing = execFileSync(
       "pnpm",
       ["exec", "wrangler", "r2", "object", "get", `${bucket}/${indexKey}`, `--${target}`, "--pipe"],
-      { cwd: PROJECT_ROOT, encoding: "utf8" },
+      { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
     );
     index = JSON.parse(existing);
   } catch {

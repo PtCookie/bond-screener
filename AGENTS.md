@@ -33,6 +33,8 @@ pnpm prepare          # lefthook 설치 (최초 세팅 시 자동 실행됨)
 - Vitest 4.x는 `"ssr"` 환경에 `resolve.external`을 강제 설정하는데, `@astrojs/cloudflare` 어댑터가 등록하는 `@cloudflare/vite-plugin`도 같은 이름의 환경을 쓰면서 이를 금지해 `pnpm test` 시작 자체가 실패한다. `astro.config.mjs`는 `process.env.VITEST`일 때 `adapter`를 비활성화해 이를 우회하므로, 이 조건 분기를 제거하지 말 것.
 - Claude Code 세션에서 `pnpm dev`/`pnpm exec wrangler`는 `.claude/settings.json`의 `sandbox.excludedCommands`에 등록돼 있어 **명령을 그 문자열 그대로(감싸지 않고) 실행해야** 샌드박스 밖에서 전체 호스트 권한으로 돈다. `timeout pnpm dev &`처럼 앞에 다른 명령을 붙이면 패턴이 안 맞아 그냥 샌드박스 안에서 실행되고, 그렇게 뜬 dev 서버는 프로세스 네임스페이스가 갈려서 이후 `pnpm dev stop`(언샌드박스 실행)으로도 못 찾고 못 죽인다 — 백그라운드로 띄울 때 특히 주의.
 - D1 로컬 모드(`wrangler d1 execute --local`)는 `sandbox.network.allowLocalBinding: true`(같은 설정 파일)가 있어야 동작한다. 이미 켜져 있음 — 지우지 말 것.
+- `scripts/backfill.mjs`/`scripts/build-snapshot.mjs`가 `execFileSync`로 spawn하는 `wrangler` 서브프로세스는 (예: `pnpm backfill apply ...`처럼) 최상위 Bash 명령이 `pnpm exec wrangler ...` 자체가 아닌 한 `sandbox.excludedCommands`에 매칭되지 않아 샌드박스 안에서 실행된다. wrangler가 기본으로 보내는 텔레메트리(`sparrow.cloudflare.com`) 호출이 샌드박스 네트워크 정책에 막혀 명령 전체가 조용히 실패하므로, 두 스크립트 모두 `scripts/lib/wrangler-config.mjs`의 `WRANGLER_ENV`(`WRANGLER_SEND_METRICS=false`)를 해당 `execFileSync` 호출의 `env`로 넘겨 텔레메트리 자체를 끈다 — 새 `execFileSync(..., "wrangler", ...)` 호출을 추가할 때도 이 `env`를 넘길 것.
+- wrangler의 OAuth 로그인 토큰은 만료되면 자동 갱신을 시도하는데, non-interactive 환경(예약 작업/스크립트 실행)에서는 브라우저 재인증을 못 해 `wrangler whoami`/`d1 execute` 등이 "Not logged in. Your auth token has expired..." 로 실패한다. 이 경우 사용자가 인터랙티브 터미널에서 `wrangler login`을 다시 실행해야 하며, 예약 작업으로 완전히 자동화하려면 `CLOUDFLARE_API_TOKEN` 환경변수(OAuth 대신 API 토큰 인증)를 등록하는 방법을 검토할 것.
 
 ## Tech Stack
 
