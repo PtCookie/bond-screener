@@ -4,3 +4,6 @@ allowBuilds:
   msw: true
   sharp: true
   workerd: true
+minimumReleaseAgeExclude:
+  - '@tanstack/react-table@9.2.3'
+  - '@tanstack/table-core@9.2.3'

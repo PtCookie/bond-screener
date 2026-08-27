@@ -1,11 +1,13 @@
 ---
-import Welcome from "../components/Welcome.astro";
 import Layout from "../layouts/Layout.astro";
+import { BondScreener, type ScreenerDebugState } from "../components/screener/BondScreener";
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+const stateParam = Astro.url.searchParams.get("state");
+const debugState: ScreenerDebugState = stateParam === "loading" || stateParam === "empty" ? stateParam : null;
 ---
 
-<Layout>
-  <Welcome />
+<Layout title="채권 스크리너">
+  <main class="mx-auto max-w-[1400px] px-4 py-6">
+    <BondScreener client:load debugState={debugState} />
+  </main>
 </Layout>
