@@ -54,7 +54,7 @@ function wranglerD1Query(sql, target) {
       "--command",
       sql,
     ],
-    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
+    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV, maxBuffer: 64 * 1024 * 1024 },
   );
   const parsed = JSON.parse(out);
   return parsed[0]?.results ?? [];
@@ -164,7 +164,7 @@ async function main() {
       `--${target}`,
       "--content-type=application/json",
     ],
-    { cwd: PROJECT_ROOT, stdio: "inherit" },
+    { cwd: PROJECT_ROOT, stdio: "inherit", env: WRANGLER_ENV },
   );
 
   console.log(`완료: basDt=${basDt}, ${rows.length}행`);
