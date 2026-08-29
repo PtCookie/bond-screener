@@ -33,14 +33,16 @@ function buildDeltaRow(item: BondPriceInfoItem): (string | number | null)[] {
   ];
 }
 
+/**
+ * index.json이 **없을 때만** 빈 인덱스로 취급한다. 파싱 실패(손상된/부분 기록된 JSON)는
+ * 그대로 rethrow한다 — 여기서 삼켜서 빈 인덱스를 반환하면 호출부가 그 값을 그대로
+ * 덮어써 base 포인터와 누적 델타 목록이 영구 소실된다. 델타 쓰기가 시끄럽게 실패하는
+ * 편이 인덱스를 조용히 날리는 것보다 낫다 — 다음 tick에서 재시도된다.
+ */
 async function readIndex(bucket: R2Bucket): Promise<SnapshotIndex> {
   const obj = await bucket.get(SNAPSHOT_INDEX_KEY);
   if (!obj) return { generatedAt: new Date(0).toISOString(), bond: null, priceDeltas: [] };
-  try {
-    return await obj.json<SnapshotIndex>();
-  } catch {
-    return { generatedAt: new Date(0).toISOString(), bond: null, priceDeltas: [] };
-  }
+  return await obj.json<SnapshotIndex>();
 }
 
 export async function writePriceDelta(
@@ -54,10 +56,16 @@ export async function writePriceDelta(
 
   const index = await readIndex(bucket);
   const baseBasDt = index.bond?.basDt ?? 0;
-  const deltas = [
-    ...index.priceDeltas.filter((d) => d.basDt > baseBasDt && d.basDt !== basDt),
-    { key, basDt, count: items.length },
-  ].sort((a, b) => a.basDt - b.basDt);
+  // base에 이미 포함된 날짜(이하)는 기존 델타뿐 아니라 지금 막 쓴 델타에도 똑같이
+  // 적용해야 한다 — 그렇지 않으면 백필/재처리로 basDt <= baseBasDt인 델타를 쓸 때
+  // index가 오염된다.
+  const deltas =
+    basDt > baseBasDt
+      ? [
+          ...index.priceDeltas.filter((d) => d.basDt > baseBasDt && d.basDt !== basDt),
+          { key, basDt, count: items.length },
+        ].sort((a, b) => a.basDt - b.basDt)
+      : index.priceDeltas.filter((d) => d.basDt > baseBasDt);
 
   const newIndex: SnapshotIndex = { generatedAt: new Date().toISOString(), bond: index.bond, priceDeltas: deltas };
   await bucket.put(SNAPSHOT_INDEX_KEY, JSON.stringify(newIndex), {

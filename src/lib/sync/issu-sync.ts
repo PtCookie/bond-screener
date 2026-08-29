@@ -53,24 +53,32 @@ export async function runIssuSyncStep(
     }
   }
 
-  await env.ARCHIVE.put(archiveRawResponse("issu", run.bas_dt, run.next_page), page.rawBody, {
-    httpMetadata: { contentType: "application/json" },
-  });
+  // fetch 이후(R2 아카이브 ~ D1 반영)도 실패할 수 있다 — 여기서 잡지 않으면 예외가
+  // `ctx.waitUntil`에 삼켜지고 run이 `running`으로 영구 방치돼, `bas_dt` 필터 없는
+  // `getRunningSyncRun`이 이후 모든 tick을 이 좀비 run에 묶어 버린다.
+  try {
+    await env.ARCHIVE.put(archiveRawResponse("issu", run.bas_dt, run.next_page), page.rawBody, {
+      httpMetadata: { contentType: "application/json" },
+    });
 
-  const writeResult = await writeBondPage(env.DB, page.items, run.bas_dt);
+    const writeResult = await writeBondPage(env.DB, page.items, run.bas_dt);
 
-  const isLastPage = run.next_page * ISSU_PAGE_SIZE >= page.totalCount;
-  await advanceSyncRun(env.DB, "issu", run.bas_dt, {
-    nextPage: run.next_page + 1,
-    totalCount: page.totalCount,
-    rowsSeenDelta: page.items.length,
-    rowsWrittenDelta: writeResult.upserted,
-    now,
-  });
+    const isLastPage = run.next_page * ISSU_PAGE_SIZE >= page.totalCount;
+    await advanceSyncRun(env.DB, "issu", run.bas_dt, {
+      nextPage: run.next_page + 1,
+      totalCount: page.totalCount,
+      rowsSeenDelta: page.items.length,
+      rowsWrittenDelta: writeResult.upserted,
+      now,
+    });
 
-  if (isLastPage) {
-    await finishSyncRun(env.DB, "issu", run.bas_dt, now, page.totalCount === 0);
+    if (isLastPage) {
+      await finishSyncRun(env.DB, "issu", run.bas_dt, now, page.totalCount === 0);
+    }
+
+    return { done: isLastPage, queriesUsed: writeResult.queriesUsed + 2 };
+  } catch (err) {
+    await failSyncRun(env.DB, "issu", run.bas_dt, String(err), now);
+    return { done: true, queriesUsed: 1 };
   }
-
-  return { done: isLastPage, queriesUsed: writeResult.queriesUsed + 2 };
 }

@@ -32,13 +32,23 @@ export async function getRunningSyncRun(db: D1Database): Promise<SyncRun | null>
   return db.prepare("SELECT * FROM sync_run WHERE status = 'running' ORDER BY started_at ASC LIMIT 1").first<SyncRun>();
 }
 
+/**
+ * `planTick`의 `start` 분기에서만 호출된다(resume은 이 함수를 거치지 않는다) — 즉 이전
+ * 시도가 `empty`/`failed`로 끝난 뒤 같은 (source, bas_dt)를 처음부터 다시 도는 경우다.
+ * 그래서 `ON CONFLICT`에서도 커서·누계·에러를 전부 리셋한다. 리셋하지 않으면 이전 시도의
+ * `next_page`가 남아 `tick.ts`가 메모리에서 합성하는 `next_page: 1`과 어긋나고, 이후
+ * `resume` 경로가 DB 값을 그대로 읽으면서 앞쪽 페이지를 영구히 건너뛴다(재현:
+ * tests/workers/sync-run-repo.test.ts).
+ */
 export async function startSyncRun(db: D1Database, source: SyncSource, basDt: number, now: number): Promise<void> {
   await db
     .prepare(
       `INSERT INTO sync_run (source, bas_dt, status, next_page, rows_seen, rows_written, attempt, started_at, updated_at)
        VALUES (?1, ?2, 'running', 1, 0, 0, 1, ?3, ?3)
        ON CONFLICT(source, bas_dt) DO UPDATE SET
-         status = 'running', attempt = attempt + 1, updated_at = ?3`,
+         status = 'running', next_page = 1, total_count = NULL,
+         rows_seen = 0, rows_written = 0, finished_at = NULL, error = NULL,
+         attempt = attempt + 1, updated_at = ?3`,
     )
     .bind(source, basDt, now)
     .run();

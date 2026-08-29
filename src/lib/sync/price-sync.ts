@@ -52,33 +52,40 @@ export async function runPriceSyncStep(
     }
   }
 
-  await env.ARCHIVE.put(archiveRawResponse("price", run.bas_dt, run.next_page), page.rawBody, {
-    httpMetadata: { contentType: "application/json" },
-  });
+  // fetch 이후(R2 아카이브 ~ D1 반영)도 실패할 수 있다 — issu-sync.ts와 동일한 이유로
+  // 여기서 잡지 않으면 run이 `running`으로 영구 방치돼 이후 모든 tick을 점유한다.
+  try {
+    await env.ARCHIVE.put(archiveRawResponse("price", run.bas_dt, run.next_page), page.rawBody, {
+      httpMetadata: { contentType: "application/json" },
+    });
 
-  const writeResult = await writeBondPricePage(env.DB, page.items);
+    const writeResult = await writeBondPricePage(env.DB, page.items);
 
-  const isLastPage = run.next_page * PRICE_PAGE_SIZE >= page.totalCount;
-  await advanceSyncRun(env.DB, "price", run.bas_dt, {
-    nextPage: run.next_page + 1,
-    totalCount: page.totalCount,
-    rowsSeenDelta: page.items.length,
-    rowsWrittenDelta: writeResult.inserted,
-    now,
-  });
+    const isLastPage = run.next_page * PRICE_PAGE_SIZE >= page.totalCount;
+    await advanceSyncRun(env.DB, "price", run.bas_dt, {
+      nextPage: run.next_page + 1,
+      totalCount: page.totalCount,
+      rowsSeenDelta: page.items.length,
+      rowsWrittenDelta: writeResult.inserted,
+      now,
+    });
 
-  if (isLastPage) {
-    const isEmpty = page.totalCount === 0;
-    await finishSyncRun(env.DB, "price", run.bas_dt, now, isEmpty);
-    // 0건이면 아직 데이터가 발행되지 않은 것뿐이라(다음 tick에서 재시도됨) 빈 델타를
-    // R2에 올려 index.json을 오염시키지 않는다.
-    if (!isEmpty) {
-      // 일일 시세 델타 스냅샷은 전량 수집이 끝난 뒤 한 번만 생성한다(페이지가 여러 개여도 중복 안 함).
-      // 여러 페이지에 걸쳐 수집했을 가능성을 대비해 그날 전체를 D1에서 다시 읽지 않고,
-      // 이 tick에서 확보한 items만으로 델타를 쓴다 — 단일 페이지가 보통이라 실무상 충분하다.
-      await writePriceDelta(env.ARCHIVE, run.bas_dt, page.items);
+    if (isLastPage) {
+      const isEmpty = page.totalCount === 0;
+      await finishSyncRun(env.DB, "price", run.bas_dt, now, isEmpty);
+      // 0건이면 아직 데이터가 발행되지 않은 것뿐이라(다음 tick에서 재시도됨) 빈 델타를
+      // R2에 올려 index.json을 오염시키지 않는다.
+      if (!isEmpty) {
+        // 일일 시세 델타 스냅샷은 전량 수집이 끝난 뒤 한 번만 생성한다(페이지가 여러 개여도 중복 안 함).
+        // 여러 페이지에 걸쳐 수집했을 가능성을 대비해 그날 전체를 D1에서 다시 읽지 않고,
+        // 이 tick에서 확보한 items만으로 델타를 쓴다 — 단일 페이지가 보통이라 실무상 충분하다.
+        await writePriceDelta(env.ARCHIVE, run.bas_dt, page.items);
+      }
     }
-  }
 
-  return { done: isLastPage, queriesUsed: writeResult.queriesUsed + 2 };
+    return { done: isLastPage, queriesUsed: writeResult.queriesUsed + 2 };
+  } catch (err) {
+    await failSyncRun(env.DB, "price", run.bas_dt, String(err), now);
+    return { done: true, queriesUsed: 1 };
+  }
 }
