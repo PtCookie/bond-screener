@@ -131,6 +131,16 @@ export type BondPriceRow = readonly (string | number | null)[];
 export type CodeLabelRow = readonly (string | number | null)[];
 
 /**
+ * D1 조회 결과 행(컬럼명 키). `db.prepare(...).all<T>()`/`.first<T>()`가 반환하는
+ * `{ isin_cd: "...", crno: "...", ... }` 형태를 그대로 표현한다 — 쓰기 경로의
+ * `BondRow`(위치 배열)와 달리 읽기 전용 조회(`src/lib/d1/detail-repo.ts`,
+ * `price-repo.ts`의 `fetchBondPriceSeries`)에서 쓴다.
+ */
+export type BondRowRecord = Record<BondColumn, string | number | null>;
+export type BondStateRowRecord = Record<BondStateColumn, string | number | null>;
+export type BondPriceRowRecord = Record<BondPriceColumn, string | number | null>;
+
+/**
  * 기본정보 API가 채우지 않는(시세 API 전용) `bond` 컬럼. 시세 sync가
  * `srtn_cd`/`itms_nm`을 NULL일 때만 채우는 UPDATE 문 생성에 쓰인다.
  */

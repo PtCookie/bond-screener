@@ -88,7 +88,9 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 - **초기 백필**: `pnpm backfill <subcommand>` (`scripts/backfill.mjs`). `scripts/lib/*.mjs`는 `src/lib/`의 정규화·매핑·지문 로직을 **plain JS로 중복 구현**한 것이다(스크립트가 `node scripts/backfill.mjs`로 바로 돌아야 해서 `@/` 경로 별칭을 쓰는 TS를 import할 수 없음) — **`src/lib/bond/fingerprint.ts`와 `scripts/lib/fingerprint.mjs`는 반드시 바이트 단위로 동일한 로직을 유지할 것.** 둘이 어긋나면 백필로 적재한 지문과 cron이 이후 계산하는 지문이 달라져 전 종목이 "변경됨"으로 오판된다(실제로 이 정합성이 깨진 채 배포될 뻔한 적이 있음 — 교차 검증 없이 한쪽만 고치지 말 것).
 - **주간 스냅샷**: `pnpm snapshot` (`scripts/build-snapshot.mjs`). 29,106행 JSON 조립이 Worker Free tier CPU 예산을 훌쩍 넘겨 cron 안에서 할 수 없으므로 로컬/CI에서 주 1회 실행한다. `bond`(정적 필드) + `bond_state`(현재값) + `code_label` + 종목별 "최신" 시세(`bond_price`를 `MAX(bas_dt)` 서브쿼리로 조인, rows_read 실측 577,729 = 무료 500만/일의 11.5%) 4종을 모아 `src/lib/snapshot/format.ts`(v2 포맷: 컬럼 지향 배열, 발행인 사전화, 날짜는 epoch day)로 인코딩한다. 이 스크립트는 백필 스크립트들과 반대로 `scripts/lib/*.mjs`에 로직을 재구현하지 않고 **`src/lib/snapshot/format.ts`/`encode.ts`를 상대 경로로 직접 import한다** — 두 파일이 `@/` 별칭을 쓰지 않게 작성돼 있어 Node 24의 type stripping으로 `.ts`를 그대로 실행할 수 있기 때문(백필 스크립트 시절엔 이 방법을 몰라 plain JS 이중 구현으로 우회했었다).
 - **스냅샷 압축은 하지 않는다.** R2에는 평문 JSON을 그대로 저장하고 `/api/snapshot/[...path].ts`(`src/pages/api/snapshot/`)가 `object.body`를 스트리밍 패스스루한다 — Cloudflare 엣지가 `application/json` 응답에 실제 클라이언트 `Accept-Encoding` 기준으로 gzip/brotli를 자동 적용하기 때문(Worker CPU와 무관한 네트워크 계층 기능, "엣지 응답 압축" 문서 참고). **한때 R2에 `.json.gz`/`.json.br` 두 벌을 올려두고 Worker가 `Accept-Encoding`을 보고 골라 서빙하도록 만들었으나 동작하지 않았다** — 로컬 dev(Miniflare 기반 Workers 런타임)에서 실측한 결과 (1) `request.headers.get("accept-encoding")`은 Cloudflare가 항상 정규화한 값("br, gzip")만 보여줘 실제 클라이언트가 뭘 보냈는지 알 수 없었고(실제 값은 `request.cf.clientAcceptEncoding`에 있음) (2) `R2Object.writeHttpMetadata()`로 넘긴 `Content-Encoding` 헤더도 최종 응답에서 사라졌다. 새로 압축 관련 코드를 추가하기 전에 이 두 가지를 먼저 실측할 것.
-- **읽기(서빙) 계층**: 클라이언트는 `/api/snapshot/index` → base(`snapshot/bond/{basDt}.json`, 불변 캐시) + `index.priceDeltas`가 가리키는 델타(`snapshot/price/{basDt}.json`) 순서로 fetch해 `src/lib/snapshot/merge.ts`(delta를 basDt 오름차순으로 덮어씀) → `decode.ts`(`ScreenerRow[]`로 변환)를 거친다. `src/hooks/useScreenerData.ts`(TanStack Query, `staleTime: Infinity`)가 이 파이프라인을 감싸고, `src/components/screener/BondScreener.tsx`가 소비한다. D1은 이 경로에 전혀 관여하지 않는다(목록 조회로 인한 D1 read가 0) — 종목 상세·시계열 API(`/api/bond/{isinCd}` 등)는 아직 없고, 그때 가서 D1을 직접 쿼리하면 된다.
+- **읽기(서빙) 계층 — 목록**: 클라이언트는 `/api/snapshot/index` → base(`snapshot/bond/{basDt}.json`, 불변 캐시) + `index.priceDeltas`가 가리키는 델타(`snapshot/price/{basDt}.json`) 순서로 fetch해 `src/lib/snapshot/merge.ts`(delta를 basDt 오름차순으로 덮어씀) → `decode.ts`(`ScreenerRow[]`로 변환)를 거친다. `src/hooks/useScreenerData.ts`(TanStack Query, `staleTime: Infinity`)가 이 파이프라인을 감싸고, `src/components/screener/BondScreener.tsx`가 소비한다. D1은 이 경로에 전혀 관여하지 않는다(목록 조회로 인한 D1 read가 0).
+- **읽기(서빙) 계층 — 상세·시계열**: 목록 스냅샷은 화면용 컬럼 10개만 담으므로, 종목 하나를 깊게 볼 때는 D1을 직접 쿼리한다. `GET /api/bond/[id]`(`src/pages/api/bond/[id].ts`)는 `bond` 전체 컬럼 + `bond_state` 이력(SCD Type 2, `valid_from` 내림차순) + 최신 `bond_price`(같은 `bas_dt`에 KTS·일반채권이 동시에 있을 수 있어 배열)를 묶어 반환하고, `GET /api/bond/[id]/prices`(`src/pages/api/bond/[id]/prices.ts`)는 `from`/`to`(기본 최근 1년)·`market` 필터로 시계열을 스냅샷과 같은 컬럼 지향 포맷으로 반환한다. `id`는 12자리 ISIN 또는 9자리 단축코드(srtnCd) — 후자는 `idx_bond_srtn_cd`(partial UNIQUE, `migrations/0002_indexes.sql`)를 태운다. `bond_price` PK가 `(isin_cd, bas_dt, mrkt_ctg)` + `WITHOUT ROWID`라 시계열 조회는 보조 인덱스 없이 PK 레인지 스캔이 된다. 상세 조회는 요청당 D1 쿼리 3~4개(`db.batch`로 `bond`/이력/최신시세를 라운드트립 1회에 묶고, 응답에 실제 등장한 코드만 `code_label`에서 추가 조회)로 예산을 짧게 잡는다.
+  로직은 라우트 파일 밖에 둔다 — `src/lib/d1/detail-repo.ts`(조회)·`src/lib/d1/price-repo.ts`의 `fetchBondPriceSeries`·`src/lib/bond/detail.ts`(snake_case 행 → camelCase 응답 변환)·`src/lib/api/params.ts`(ISIN/srtnCd 분기, 날짜·시장 파라미터 검증, JSON 응답 헬퍼)로 나뉜다. 라우트(`[id].ts`/`[id]/prices.ts`)는 이 조각들을 조합만 하는 얇은 껍데기다 — workers vitest 프로젝트가 `wrangler.jsonc`의 `main`을 참조하지 않아(Astro virtual module을 해석 못 함, 아래 "테스트" 절 참고) 라우트 파일 자체는 테스트할 수 없기 때문에, 테스트 가능한 로직을 전부 라우트 밖으로 뺐다.
 
 ### 디렉터리 구조
 
@@ -106,14 +108,15 @@ src/
   layouts/        # Astro 레이아웃
   lib/
     openapi/      # 공통 fetch 클라이언트, 오류 분류, 값 정규화
-    bond/          # 컬럼 순서 정본, 매핑, 변경 감지 지문
-    d1/            # D1 바인딩 호출 (repo 계층), json_each SQL 생성
+    bond/          # 컬럼 순서 정본, 매핑, 변경 감지 지문, 상세 응답 변환(detail.ts)
+    d1/            # D1 바인딩 호출 (쓰기 repo + detail-repo.ts 등 읽기 repo), json_each SQL 생성
+    api/           # /api/* 라우트 공용 입력 검증·응답 헬퍼 (params.ts)
     sync/          # cron tick 오케스트레이션, 순수 스케줄링 로직
     r2/            # R2 키 네이밍, 아카이브, 시세 델타 스냅샷
     snapshot/      # 스크리너 목록 스냅샷 v2 포맷·인코드·디코드·병합 (format.ts/encode.ts는 @/ 별칭 미사용)
     utils.ts       # 범용 유틸리티 (cn 등)
   pages/
-    api/          # 서버 API 라우트 (snapshot 프록시 등)
+    api/          # 서버 API 라우트 (snapshot 프록시, bond/[id] 상세·시계열 등)
   worker.ts       # Workers 진입점 (fetch 위임 + scheduled)
 ```
 

@@ -1,7 +1,13 @@
 /** `bond_price` D1 바인딩 호출. */
 import type { BondPriceInfoItem } from "@/api";
 import { buildBondPriceRow } from "@/lib/bond/mappers";
-import { BOND_FILL_SRTN_ITMS_SQL, BOND_PRICE_INSERT_SQL } from "./sql";
+import type { BondPriceRowRecord } from "@/lib/bond/columns";
+import {
+  BOND_FILL_SRTN_ITMS_SQL,
+  BOND_PRICE_INSERT_SQL,
+  BOND_PRICE_SERIES_BY_MARKET_SQL,
+  BOND_PRICE_SERIES_SQL,
+} from "./sql";
 
 /**
  * 시세 1일치(`items`)를 삽입한다. 과거 시세는 사후 변경되지 않으므로 `ON CONFLICT DO NOTHING`
@@ -29,4 +35,40 @@ export async function writeBondPricePage(
   queriesUsed += 1;
 
   return { inserted: rows.length, queriesUsed };
+}
+
+export interface PriceSeriesOptions {
+  /** 기준일자 하한(포함, YYYYMMDD) */
+  from: number;
+  /** 기준일자 상한(포함, YYYYMMDD) */
+  to: number;
+  /** `null`이면 시장 필터 없음 — `src/lib/bond/market.ts`의 `marketCategoryToCode` 결과 */
+  marketCode: number | null;
+  limit: number;
+}
+
+export interface PriceSeriesResult {
+  rows: BondPriceRowRecord[];
+  /** `limit`을 채웠으면 `true` — 더 있을 수 있다는 뜻(무제한 스캔 방지용 상한이라 별도 COUNT 쿼리는 쓰지 않는다). */
+  truncated: boolean;
+}
+
+/**
+ * 종목 시계열을 날짜 범위(+선택적 시장)로 조회한다. `LIMIT`을 `limit + 1`로 걸어
+ * 한 행 더 받아보는 것으로 "더 있는지"를 판정한다 — 별도 `COUNT(*)` 쿼리를 추가하지
+ * 않기 위한 흔한 트릭.
+ */
+export async function fetchBondPriceSeries(
+  db: D1Database,
+  isinCd: string,
+  { from, to, marketCode, limit }: PriceSeriesOptions,
+): Promise<PriceSeriesResult> {
+  const stmt =
+    marketCode === null
+      ? db.prepare(BOND_PRICE_SERIES_SQL).bind(isinCd, from, to, limit + 1)
+      : db.prepare(BOND_PRICE_SERIES_BY_MARKET_SQL).bind(isinCd, from, to, marketCode, limit + 1);
+
+  const result = await stmt.all<BondPriceRowRecord>();
+  const truncated = result.results.length > limit;
+  return { rows: truncated ? result.results.slice(0, limit) : result.results, truncated };
 }
