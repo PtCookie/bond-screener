@@ -1,42 +1,33 @@
 #!/usr/bin/env node
 // 스크리너 목록 화면용 기준 스냅샷을 D1에서 뽑아 R2에 올린다. 주 1회, Worker 밖(로컬/CI)에서
-// 실행한다 — 29,087행 JSON 조립+gzip이 Worker Free tier CPU 10ms 예산을 훌쩍 넘기기 때문이다
-// (실측: 3MB JSON stringify+gzip). D1/R2 접근은 `wrangler d1 execute --json`과
-// `wrangler r2 object put`을 하위 프로세스로 호출해서 한다(별도 API 클라이언트 불필요).
+// 실행한다 — 29,106행 JSON 조립이 Worker Free tier CPU 10ms 예산을 훌쩍 넘기기 때문이다.
+// D1/R2 접근은 `wrangler d1 execute --json`과 `wrangler r2 object put`을 하위 프로세스로
+// 호출해서 한다(별도 API 클라이언트 불필요).
+//
+// 압축은 하지 않는다 — Cloudflare 엣지가 `application/json` 응답에 실제 클라이언트
+// Accept-Encoding 기준으로 gzip/brotli를 자동 적용한다(Worker CPU와 무관한 네트워크 계층
+// 기능). 처음엔 여기서 직접 gzip/brotli 두 벌을 만들어 올리고 `/api/snapshot/*` 라우트가
+// 골라 서빙하게 했으나, 로컬 dev(Miniflare)에서 실측한 결과 그 방식은 애초에 동작하지
+// 않았다(`src/lib/r2/keys.ts`의 `snapshotBondKey` 주석 참고) — 압축은 플랫폼에 맡길 것.
 //
 // 사용법: node scripts/build-snapshot.mjs [--remote|--local]
 //
-// 산출물: snapshot/bond/{basDt}.json.gz (스크리너 18필드, 배열 포맷) + snapshot/index.json 갱신.
-// 키 네이밍은 src/lib/r2/keys.ts(snapshotBondKey/SNAPSHOT_INDEX_KEY)와 반드시 일치해야 한다 —
-// 여기서도 문자열로 재구현했다(스크립트가 TS를 import할 수 없는 이유는 scripts/lib/*.mjs 상단 주석 참고).
+// 산출물: snapshot/bond/{basDt}.json(v2 포맷, 컬럼지향+발행인사전화+epoch day —
+// `src/lib/snapshot/format.ts` 참고) + snapshot/index.json 갱신.
+//
+// 포맷 정본은 `src/lib/snapshot/format.ts`/`encode.ts` 한 벌뿐이다. `@/` 경로 별칭 없이
+// 작성돼 있어 Node 24의 type stripping으로 이 스크립트가 상대 경로로 직접 import한다 —
+// scripts/lib/*.mjs가 src/lib/bond/의 정규화·매핑 로직을 plain JS로 재구현해야 했던 것과
+// 같은 이중 구현 함정을 피하기 위함(AGENTS.md의 fingerprint 정합성 경고 참고).
 
 import { execFileSync } from "node:child_process";
-import { gzipSync } from "node:zlib";
 import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PROJECT_ROOT } from "./lib/env.mjs";
 import { readDatabaseName, readBucketName, WRANGLER_ENV } from "./lib/wrangler-config.mjs";
-
-// 스크리너 목록에 필요한 18필드. code_label로 뺀 코드는 별도 조인 없이 스냅샷 헤더에
-// 라벨 사전을 통째로 실어 클라이언트에서 매핑한다.
-const COLUMNS = [
-  "isin_cd",
-  "srtn_cd",
-  "itms_nm",
-  "bond_isur_nm",
-  "scrs_itms_kcd",
-  "bond_issu_dt",
-  "bond_expr_dt",
-  "bond_srfc_inrt",
-  "bond_int_tcd",
-  "int_pay_cycl_ctt",
-  "txtn_dcd",
-  "grn_dcd",
-  "bond_rnkn_dcd",
-  "optn_tcd",
-];
-const STATE_COLUMNS = ["bond_bal", "nxtm_copn_dt", "kis_grade"];
+import { encodeSnapshot } from "../src/lib/snapshot/encode.ts";
+import { snapshotBondKey, SNAPSHOT_INDEX_KEY } from "../src/lib/r2/keys.ts";
 
 function wranglerD1Query(sql, target) {
   const out = execFileSync(
@@ -60,85 +51,63 @@ function wranglerD1Query(sql, target) {
   return parsed[0]?.results ?? [];
 }
 
+function wranglerR2Put(bucket, key, filePath, target, extraArgs = []) {
+  execFileSync(
+    "pnpm",
+    ["exec", "wrangler", "r2", "object", "put", `${bucket}/${key}`, `--file=${filePath}`, `--${target}`, ...extraArgs],
+    { cwd: PROJECT_ROOT, stdio: "inherit", env: WRANGLER_ENV },
+  );
+}
+
 async function main() {
   const target = process.argv.includes("--local") ? "local" : "remote";
 
-  console.log(`D1(${target})에서 bond + bond_state(현재값) + code_label 조회 중...`);
+  console.log(`D1(${target})에서 bond + bond_state(현재값) + code_label + 종목별 최신시세 조회 중...`);
   const bondRows = wranglerD1Query(
-    `SELECT ${COLUMNS.join(", ")}, first_seen_bas_dt, last_chg_bas_dt FROM bond`,
+    "SELECT isin_cd, isin_cd_nm, bond_isur_nm, scrs_itms_kcd, bond_issu_dt, bond_expr_dt, bond_srfc_inrt, bond_int_tcd, last_chg_bas_dt FROM bond",
     target,
   );
   const stateRows = wranglerD1Query(
-    `SELECT isin_cd, ${STATE_COLUMNS.join(", ")} FROM bond_state WHERE valid_to IS NULL`,
+    "SELECT isin_cd, bond_bal, kis_grade FROM bond_state WHERE valid_to IS NULL",
     target,
   );
-  const labelRows = wranglerD1Query(`SELECT domain, code, label FROM code_label`, target);
+  const codeLabelRows = wranglerD1Query("SELECT domain, code, label FROM code_label", target);
+  // 종목별 "최신" 시세 1건만 — bond_price PK (isin_cd, bas_dt, mrkt_ctg) 인덱스 없이도
+  // GROUP BY isin_cd 서브쿼리 조인으로 실행된다(실측 rows_read 577,729, 무료 500만/일의 11.5%,
+  // 주 1회 실행이라 허용 범위).
+  const latestPriceRows = wranglerD1Query(
+    `SELECT p.isin_cd, p.bas_dt, p.mrkt_ctg, p.clpr_prc, p.clpr_vs, p.clpr_bnf_rt, p.trqu
+     FROM bond_price p
+     JOIN (SELECT isin_cd, MAX(bas_dt) mx FROM bond_price GROUP BY isin_cd) m
+       ON p.isin_cd = m.isin_cd AND p.bas_dt = m.mx`,
+    target,
+  );
 
-  const stateByIsin = new Map(stateRows.map((r) => [r.isin_cd, r]));
-  const codeLabels = {};
-  for (const { domain, code, label } of labelRows) {
-    (codeLabels[domain] ??= {})[code] = label;
-  }
+  const payload = encodeSnapshot({ bondRows, stateRows, codeLabelRows, latestPriceRows });
+  const json = JSON.stringify(payload);
 
-  const basDt = Math.max(...bondRows.map((r) => r.last_chg_bas_dt), 0);
-  const rows = bondRows.map((r) => [
-    r.isin_cd,
-    r.srtn_cd,
-    r.itms_nm,
-    r.bond_isur_nm,
-    r.scrs_itms_kcd,
-    r.bond_issu_dt,
-    r.bond_expr_dt,
-    r.bond_srfc_inrt,
-    r.bond_int_tcd,
-    r.int_pay_cycl_ctt,
-    r.txtn_dcd,
-    r.grn_dcd,
-    r.bond_rnkn_dcd,
-    r.optn_tcd,
-    stateByIsin.get(r.isin_cd)?.bond_bal ?? null,
-    stateByIsin.get(r.isin_cd)?.nxtm_copn_dt ?? null,
-    stateByIsin.get(r.isin_cd)?.kis_grade ?? null,
-  ]);
-
-  const columns = [...COLUMNS, ...STATE_COLUMNS];
-  const payload = JSON.stringify({ basDt, columns, codeLabels, rows });
-  const gz = gzipSync(payload, { level: 9 });
   console.log(
-    `스냅샷: ${rows.length}행, raw ${(payload.length / 1024).toFixed(0)}KB, gzip ${(gz.length / 1024).toFixed(0)}KB`,
+    `스냅샷: bond ${payload.cols[0].length}행, 시세 ${payload.priceCols[0].length}행, ` +
+      `발행인 ${payload.issuers.length}종, raw ${(json.length / 1024).toFixed(0)}KB`,
   );
 
   const tmpDir = mkdtempSync(path.join(tmpdir(), "bond-snapshot-"));
-  const gzPath = path.join(tmpDir, "bond.json.gz");
-  writeFileSync(gzPath, gz);
+  const jsonPath = path.join(tmpDir, "bond.json");
+  writeFileSync(jsonPath, json);
 
   const bucket = readBucketName();
-  const key = `snapshot/bond/${basDt}.json.gz`;
+  const basDt = payload.basDt;
+  const key = snapshotBondKey(basDt);
+
   console.log(`R2(${target})에 업로드: ${key}`);
-  execFileSync(
-    "pnpm",
-    [
-      "exec",
-      "wrangler",
-      "r2",
-      "object",
-      "put",
-      `${bucket}/${key}`,
-      `--file=${gzPath}`,
-      `--${target}`,
-      "--content-encoding=gzip",
-      "--content-type=application/json",
-    ],
-    { cwd: PROJECT_ROOT, stdio: "inherit", env: WRANGLER_ENV },
-  );
+  wranglerR2Put(bucket, key, jsonPath, target, ["--content-type=application/json"]);
 
   // index.json 갱신 — 시세 델타는 이 basDt 이전 것들을 정리(base가 이미 그 시점을 반영)
-  const indexKey = "snapshot/index.json";
   let index = { generatedAt: new Date().toISOString(), bond: null, priceDeltas: [] };
   try {
     const existing = execFileSync(
       "pnpm",
-      ["exec", "wrangler", "r2", "object", "get", `${bucket}/${indexKey}`, `--${target}`, "--pipe"],
+      ["exec", "wrangler", "r2", "object", "get", `${bucket}/${SNAPSHOT_INDEX_KEY}`, `--${target}`, "--pipe"],
       { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
     );
     index = JSON.parse(existing);
@@ -146,28 +115,14 @@ async function main() {
     // 최초 실행 — index.json 없음
   }
   index.generatedAt = new Date().toISOString();
-  index.bond = { key, basDt, count: rows.length };
+  index.bond = { key, basDt, count: payload.cols[0].length };
   index.priceDeltas = (index.priceDeltas ?? []).filter((d) => d.basDt > basDt);
 
   const indexPath = path.join(tmpDir, "index.json");
   writeFileSync(indexPath, JSON.stringify(index));
-  execFileSync(
-    "pnpm",
-    [
-      "exec",
-      "wrangler",
-      "r2",
-      "object",
-      "put",
-      `${bucket}/${indexKey}`,
-      `--file=${indexPath}`,
-      `--${target}`,
-      "--content-type=application/json",
-    ],
-    { cwd: PROJECT_ROOT, stdio: "inherit", env: WRANGLER_ENV },
-  );
+  wranglerR2Put(bucket, SNAPSHOT_INDEX_KEY, indexPath, target, ["--content-type=application/json"]);
 
-  console.log(`완료: basDt=${basDt}, ${rows.length}행`);
+  console.log(`완료: basDt=${basDt}, ${payload.cols[0].length}행`);
 }
 
 main().catch((err) => {

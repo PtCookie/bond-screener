@@ -7,8 +7,8 @@ describe("R2 키 네이밍", () => {
     expect(rawArchiveKey("price", 20260820, 12)).toBe("raw/price/2026/08/20/p0012.json");
   });
 
-  test("기준 스냅샷 키", () => {
-    expect(snapshotBondKey(20260820)).toBe("snapshot/bond/20260820.json.gz");
+  test("기준 스냅샷 키 — 압축 없이 평문 JSON(엣지가 자동 압축하므로)", () => {
+    expect(snapshotBondKey(20260820)).toBe("snapshot/bond/20260820.json");
   });
 
   test("일일 델타 키", () => {

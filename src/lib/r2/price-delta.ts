@@ -9,10 +9,14 @@ import type { BondPriceInfoItem } from "@/api";
 import { normReal, normText } from "@/lib/openapi/normalize";
 import { snapshotPriceDeltaKey, SNAPSHOT_INDEX_KEY, snapshotBondKey } from "./keys";
 
-/** 스냅샷 소비자가 필요한 최소 필드만 배열 포맷으로 담는다(키 반복 제거로 페이로드 절감). */
-const DELTA_COLUMNS = ["isinCd", "mrktCtg", "clprPrc", "clprVs", "clprBnfRt", "trqu"] as const;
+/**
+ * 스냅샷 소비자가 필요한 최소 필드만 배열 포맷으로 담는다(키 반복 제거로 페이로드 절감).
+ * `src/lib/snapshot/merge.ts`의 `PriceDeltaPayload`가 이 정본을 그대로 참조한다.
+ */
+export const DELTA_COLUMNS = ["isinCd", "mrktCtg", "clprPrc", "clprVs", "clprBnfRt", "trqu"] as const;
 
-interface SnapshotIndex {
+/** `src/lib/snapshot/client.ts`가 클라이언트에서 fetch할 때도 그대로 쓰는 index.json 스키마. */
+export interface SnapshotIndex {
   generatedAt: string;
   bond: { key: string; basDt: number; count: number } | null;
   priceDeltas: { key: string; basDt: number; count: number }[];

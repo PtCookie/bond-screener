@@ -59,7 +59,7 @@ pnpm prepare          # lefthook 설치 (최초 세팅 시 자동 실행됨)
 
 ### Cloudflare 배포
 
-`@astrojs/cloudflare` 어댑터 사용, `astro.config.mjs`에서 `output: "server"` 설정 완료. `wrangler.jsonc`의 `main`은 어댑터 entrypoint가 아니라 커스텀 진입점 `src/worker.ts`를 가리킨다 — cron `scheduled` 핸들러(아래 "데이터 계층" 절)를 추가하기 위해서다. `src/worker.ts`는 `fetch`를 `@astrojs/cloudflare/handler`의 `handle`에 그대로 위임하므로 Astro 라우팅 동작은 이전과 동일하다. 시크릿(`serviceKey` 등)은 `Astro.locals.runtime.env` 또는 `import.meta.env`로 접근한다.
+`@astrojs/cloudflare` 어댑터 사용, `astro.config.mjs`에서 `output: "server"` 설정 완료. `wrangler.jsonc`의 `main`은 어댑터 entrypoint가 아니라 커스텀 진입점 `src/worker.ts`를 가리킨다 — cron `scheduled` 핸들러(아래 "데이터 계층" 절)를 추가하기 위해서다. `src/worker.ts`는 `fetch`를 `@astrojs/cloudflare/handler`의 `handle`에 그대로 위임하므로 Astro 라우팅 동작은 이전과 동일하다. 시크릿(`serviceKey` 등)·바인딩은 `import { env } from "cloudflare:workers"`로 접근한다 — 설치된 `@astrojs/cloudflare`(Astro v6+ 대응, v14.1.3)는 `Astro.locals.runtime.env`를 제거했고 접근 시 즉시 throw한다(`node_modules/@astrojs/cloudflare/dist/utils/cf-helpers.js`의 `createLocals` 실측 확인). 옛 어댑터 문서·예제의 `Astro.locals.runtime.env` 패턴을 따라 하지 말 것.
 - **로컬 개발**(`pnpm dev`/`wrangler dev`): 프로젝트 루트에 `.dev.vars` 또는 `.env` 파일에 `KEY="VALUE"` 형식으로 넣는다. **둘 중 하나만 사용할 것** — `.dev.vars`가 존재하면 `.env`의 값은 무시된다. 오픈API 인증키는 `BOND_API_SERVICE_KEY`라는 이름으로 넣는다(`.claude/skills/probe-bond-api`가 이 이름을 찾는다).
 - **배포**(`wrangler deploy`): `.dev.vars`/`.env`는 로컬 전용이라 배포된 Worker에는 전달되지 않는다. 반드시 `wrangler secret put <NAME>`으로 Cloudflare 플랫폼에 시크릿을 등록해야 하며, `wrangler deploy`는 그 등록된 값을 그대로 바인딩한다.
 - `.dev.vars`, `.env`는 커밋 금지 (`.gitignore`에 `.dev.vars*`, `.env*` 패턴으로 등록됨).
@@ -70,7 +70,7 @@ pnpm prepare          # lefthook 설치 (최초 세팅 시 자동 실행됨)
 
 일일 호출 쿼터(개발계정 10,000건)와 시크릿 노출 문제 때문에 클라이언트가 오픈API를 직접 호출하지 않는다. `Client → Workers(cron) → data.go.kr` 구조로, Workers가 매일 데이터를 미리 긁어 D1에 저장하고 R2에 정적 스냅샷을 올리면 클라이언트는 R2 스냅샷만 받는다(D1 read 500만/일 한도 보호).
 
-- **스키마**: `migrations/0001_init.sql`(`bond`/`bond_state`/`bond_price`/`code_label`/`sync_run`/`app_meta`). 인덱스는 `migrations/pending/0002_indexes.sql`에 별도 보관하다가 초기 백필 완료 후에만 적용한다(백필 중 인덱스가 있으면 D1 write가 2배로 잡힘).
+- **스키마**: `migrations/0001_init.sql`(`bond`/`bond_state`/`bond_price`/`code_label`/`sync_run`/`app_meta`), `migrations/0002_indexes.sql`(`idx_bond_expr_dt`/`idx_bond_srtn_cd`, 백필 완료 후 2026-08-28 적용). 백필 중에는 인덱스가 있으면 D1 write가 2배로 잡혀 `migrations/pending/`에 보류해 뒀던 것 — 새 인덱스를 추가할 때도 대량 백필이 얽힌 테이블이면 같은 패턴(pending에 보관 후 백필 완료 시 이동)을 고려할 것.
 - **fetch/정규화**: `src/lib/openapi/`(공통 클라이언트·오류 분류·`""`/`" "`/`"NULL"` 정규화), `src/lib/bond/`(컬럼 순서 정본 `columns.ts`, 매핑 `mappers.ts`, 변경 감지 지문 `fingerprint.ts`).
 - **D1 접근**: `src/lib/d1/sql.ts`가 `json_each(?1)`로 파라미터 1개에 배열을 실어 쿼리 1개로 벌크 upsert하는 SQL을 생성한다(Worker의 "쿼리 50개/invocation", "bound parameter 100개/쿼리" 제한 우회). **`INSERT ... SELECT ... FROM json_each(?1) ON CONFLICT ...` 형태는 SQLite 파서가 "near 'DO': syntax error"를 내므로 반드시 `FROM` 절과 `ON CONFLICT` 사이에 `WHERE true` 더미절을 넣어야 한다** — `buildInsertSelect` 헬퍼가 이미 방어하고 있으니 새 upsert SQL을 추가할 때도 이 헬퍼를 거칠 것.
 - **cron 파이프라인**: `src/worker.ts`의 `scheduled` → `src/lib/sync/tick.ts`(`runSyncTick`). **한 tick(1분 간격)에 정확히 페이지 1개만 처리한다** — Free tier CPU 10ms 예산 안에 들어가야 하므로(`src/lib/sync/config.ts`의 `ISSU_PAGE_SIZE=200` 근거). 여러 페이지를 한 invocation에서 루프 돌리지 말 것.
@@ -79,19 +79,23 @@ pnpm prepare          # lefthook 설치 (최초 세팅 시 자동 실행됨)
 - **`wrangler d1 execute --file`은 SQL statement 하나가 100,000 byte를 넘으면 `SQLITE_TOOBIG`으로 실패한다.** 벌크 INSERT는 행 개수가 아니라 바이트 예산으로 청크를 나눠야 한다 — `scripts/lib/sql-gen.mjs`의 `buildMultiValuesInsert`(테이블별 실제 write 배수를 `writeMultiplier`로 추적해 일일 write 예산도 함께 관리)가 이미 이렇게 되어 있으니 새 백필 SQL을 추가할 때도 이 헬퍼를 거칠 것.
 - **테스트**: `astro.config.mjs`의 `isVitest` 분기 때문에 vitest에는 Cloudflare 런타임이 없다(위 "알려진 이슈" 참고). D1 의존 로직은 `tests/helpers/fake-d1.ts`(`node:sqlite` 기반 `D1Database` 어댑터, Node 24.18.0 내장)로 테스트한다.
 - **초기 백필**: `pnpm backfill <subcommand>` (`scripts/backfill.mjs`). `scripts/lib/*.mjs`는 `src/lib/`의 정규화·매핑·지문 로직을 **plain JS로 중복 구현**한 것이다(스크립트가 `node scripts/backfill.mjs`로 바로 돌아야 해서 `@/` 경로 별칭을 쓰는 TS를 import할 수 없음) — **`src/lib/bond/fingerprint.ts`와 `scripts/lib/fingerprint.mjs`는 반드시 바이트 단위로 동일한 로직을 유지할 것.** 둘이 어긋나면 백필로 적재한 지문과 cron이 이후 계산하는 지문이 달라져 전 종목이 "변경됨"으로 오판된다(실제로 이 정합성이 깨진 채 배포될 뻔한 적이 있음 — 교차 검증 없이 한쪽만 고치지 말 것).
-- **주간 스냅샷**: `pnpm snapshot` (`scripts/build-snapshot.mjs`). 29,087행 JSON 조립+gzip이 Worker Free tier CPU 예산을 훌쩍 넘겨 cron 안에서 할 수 없으므로 로컬/CI에서 주 1회 실행한다.
+- **주간 스냅샷**: `pnpm snapshot` (`scripts/build-snapshot.mjs`). 29,106행 JSON 조립이 Worker Free tier CPU 예산을 훌쩍 넘겨 cron 안에서 할 수 없으므로 로컬/CI에서 주 1회 실행한다. `bond`(정적 필드) + `bond_state`(현재값) + `code_label` + 종목별 "최신" 시세(`bond_price`를 `MAX(bas_dt)` 서브쿼리로 조인, rows_read 실측 577,729 = 무료 500만/일의 11.5%) 4종을 모아 `src/lib/snapshot/format.ts`(v2 포맷: 컬럼 지향 배열, 발행인 사전화, 날짜는 epoch day)로 인코딩한다. 이 스크립트는 백필 스크립트들과 반대로 `scripts/lib/*.mjs`에 로직을 재구현하지 않고 **`src/lib/snapshot/format.ts`/`encode.ts`를 상대 경로로 직접 import한다** — 두 파일이 `@/` 별칭을 쓰지 않게 작성돼 있어 Node 24의 type stripping으로 `.ts`를 그대로 실행할 수 있기 때문(백필 스크립트 시절엔 이 방법을 몰라 plain JS 이중 구현으로 우회했었다).
+- **스냅샷 압축은 하지 않는다.** R2에는 평문 JSON을 그대로 저장하고 `/api/snapshot/[...path].ts`(`src/pages/api/snapshot/`)가 `object.body`를 스트리밍 패스스루한다 — Cloudflare 엣지가 `application/json` 응답에 실제 클라이언트 `Accept-Encoding` 기준으로 gzip/brotli를 자동 적용하기 때문(Worker CPU와 무관한 네트워크 계층 기능, "엣지 응답 압축" 문서 참고). **한때 R2에 `.json.gz`/`.json.br` 두 벌을 올려두고 Worker가 `Accept-Encoding`을 보고 골라 서빙하도록 만들었으나 동작하지 않았다** — 로컬 dev(Miniflare 기반 Workers 런타임)에서 실측한 결과 (1) `request.headers.get("accept-encoding")`은 Cloudflare가 항상 정규화한 값("br, gzip")만 보여줘 실제 클라이언트가 뭘 보냈는지 알 수 없었고(실제 값은 `request.cf.clientAcceptEncoding`에 있음) (2) `R2Object.writeHttpMetadata()`로 넘긴 `Content-Encoding` 헤더도 최종 응답에서 사라졌다. 새로 압축 관련 코드를 추가하기 전에 이 두 가지를 먼저 실측할 것.
+- **읽기(서빙) 계층**: 클라이언트는 `/api/snapshot/index` → base(`snapshot/bond/{basDt}.json`, 불변 캐시) + `index.priceDeltas`가 가리키는 델타(`snapshot/price/{basDt}.json`) 순서로 fetch해 `src/lib/snapshot/merge.ts`(delta를 basDt 오름차순으로 덮어씀) → `decode.ts`(`ScreenerRow[]`로 변환)를 거친다. `src/hooks/useScreenerData.ts`(TanStack Query, `staleTime: Infinity`)가 이 파이프라인을 감싸고, `src/components/screener/BondScreener.tsx`가 소비한다. D1은 이 경로에 전혀 관여하지 않는다(목록 조회로 인한 D1 read가 0) — 종목 상세·시계열 API(`/api/bond/{isinCd}` 등)는 아직 없고, 그때 가서 D1을 직접 쿼리하면 된다.
 
 ### 디렉터리 구조
 
 ```
 docs/
   api/            # 오픈API 2종 명세 문서 (src/api/와 1:1 대응)
-migrations/       # D1 스키마 마이그레이션 (pending/는 백필 완료 전까지 보류)
+migrations/       # D1 스키마 마이그레이션
 scripts/          # 초기 백필·스냅샷 빌드 CLI (Node ESM, 무의존성)
 src/
   api/            # 오픈API 요청/응답 TypeScript 타입·상수 (와이어 포맷 그대로, 로직 없음)
   components/     # React 및 Astro 컴포넌트
+    providers/    # QueryProvider 등 React island 내부에서 쓰는 컨텍스트 프로바이더
     ui/           # shadcn/ui 컴포넌트 (자동 생성, 직접 수정 가능)
+  hooks/          # React 커스텀 훅 (useScreenerData 등, TanStack Query 기반)
   layouts/        # Astro 레이아웃
   lib/
     openapi/      # 공통 fetch 클라이언트, 오류 분류, 값 정규화
@@ -99,8 +103,10 @@ src/
     d1/            # D1 바인딩 호출 (repo 계층), json_each SQL 생성
     sync/          # cron tick 오케스트레이션, 순수 스케줄링 로직
     r2/            # R2 키 네이밍, 아카이브, 시세 델타 스냅샷
+    snapshot/      # 스크리너 목록 스냅샷 v2 포맷·인코드·디코드·병합 (format.ts/encode.ts는 @/ 별칭 미사용)
     utils.ts       # 범용 유틸리티 (cn 등)
-  pages/          # 파일 기반 라우팅
+  pages/
+    api/          # 서버 API 라우트 (snapshot 프록시 등)
   worker.ts       # Workers 진입점 (fetch 위임 + scheduled)
 ```
 

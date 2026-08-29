@@ -1,12 +1,9 @@
--- 백필 완료 후에만 적용할 것.
+-- 백필 완료 후 적용됨 (2026-08-28).
 --
 -- D1은 write마다 인덱스 컬럼이 걸리면 대상 테이블 행 + 인덱스 행, 총 2배로 rows written이
 -- 잡힌다(Cloudflare 과금 문서: "Indexes will add an additional written row when writes include
 -- the indexed column"). 백필 중에 인덱스가 있으면 write 한도(100,000/일) 분할 계획이 절반으로
--- 줄어들므로, 반드시 bond 전량 적재가 끝난 뒤 이 파일을 migrations/ 로 옮겨 적용한다.
---
--- 사용법: mv migrations/pending/0002_indexes.sql migrations/0002_indexes.sql
---         wrangler d1 migrations apply bond-screener --remote --config ./wrangler.jsonc
+-- 줄어들어 `migrations/pending/`에 보류해 뒀었다 — bond 전량 적재가 끝난 지금은 그 제약이 없다.
 
 -- 잔존만기 컬럼을 별도로 두지 않는 대신, 만기일 범위 필터로 등가 변환한다.
 CREATE INDEX idx_bond_expr_dt ON bond (bond_expr_dt);

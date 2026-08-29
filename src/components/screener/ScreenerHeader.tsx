@@ -2,7 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { fmtYmd } from "@/lib/screener/format";
 
 interface ScreenerHeaderProps {
-  basDt: number;
+  /** 로딩 중이거나 실패해 아직 알 수 없으면 null. */
+  basDt: number | null;
   totalCount: number;
 }
 

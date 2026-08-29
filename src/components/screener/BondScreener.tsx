@@ -1,30 +1,20 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTable, type PaginationState, type SortingState } from "@tanstack/react-table";
-import { MOCK_ROWS } from "@/lib/screener/mock";
+import { QueryProvider } from "@/components/providers/QueryProvider";
+import { useScreenerData } from "@/hooks/useScreenerData";
+import type { ScreenerRow } from "@/lib/screener/types";
 import { screenerColumns, screenerFeatures } from "./columns";
+import { ScreenerError } from "./ScreenerError";
 import { ScreenerFilterBar } from "./ScreenerFilterBar";
 import { ScreenerHeader } from "./ScreenerHeader";
 import { ScreenerPagination } from "./ScreenerPagination";
 import { ScreenerTable } from "./ScreenerTable";
 
-/** mock 기준일자. 실 데이터 전환 시 스냅샷의 basDt로 교체. */
-const MOCK_BAS_DT = 20260826;
+const EMPTY_ROWS: ScreenerRow[] = [];
 
-export type ScreenerDebugState = "loading" | "empty" | null;
-
-interface BondScreenerProps {
-  /**
-   * `?state=loading` / `?state=empty`로 로딩·빈 상태를 눈으로 확인하기 위한 디버그
-   * 스위치 — 실 데이터 전환 시 제거. Astro가 `Astro.url.searchParams`로 서버에서
-   * 읽어 prop으로 내려준다: React island 내부에서 `window`로 직접 읽으면 서버
-   * 렌더(`output: "server"`라 항상 window 없음 → null)와 클라이언트 하이드레이션
-   * 결과가 달라져 하이드레이션 불일치가 난다(실측으로 재현 확인됨).
-   */
-  debugState?: ScreenerDebugState;
-}
-
-export function BondScreener({ debugState = null }: BondScreenerProps) {
-  const rows = useMemo(() => (debugState === "empty" ? [] : MOCK_ROWS), [debugState]);
+function BondScreenerInner() {
+  const { data, isPending, isError, error, refetch } = useScreenerData();
+  const rows = data?.rows ?? EMPTY_ROWS;
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 25 });
@@ -41,12 +31,33 @@ export function BondScreener({ debugState = null }: BondScreenerProps) {
 
   return (
     <div className="space-y-4">
-      <ScreenerHeader basDt={MOCK_BAS_DT} totalCount={rows.length} />
+      {/* 시세 기준일(priceBasDt)이 사용자에게 의미 있는 "오늘 화면에 보이는 날짜"라 우선한다 —
+          bond 정적 필드 기준일(basDt)은 시세보다 갱신이 드물다(주 1회). */}
+      <ScreenerHeader basDt={data?.priceBasDt ?? data?.basDt ?? null} totalCount={rows.length} />
       <ScreenerFilterBar />
-      <div className="overflow-hidden rounded-lg border">
-        <ScreenerTable table={table} isLoading={debugState === "loading"} />
-      </div>
-      <ScreenerPagination table={table} totalCount={rows.length} />
+      {isError ? (
+        <div className="overflow-hidden rounded-lg border">
+          <ScreenerError
+            message={error instanceof Error ? error.message : String(error)}
+            onRetry={() => void refetch()}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="overflow-hidden rounded-lg border">
+            <ScreenerTable table={table} isLoading={isPending} />
+          </div>
+          <ScreenerPagination table={table} totalCount={rows.length} />
+        </>
+      )}
     </div>
+  );
+}
+
+export function BondScreener() {
+  return (
+    <QueryProvider>
+      <BondScreenerInner />
+    </QueryProvider>
   );
 }
