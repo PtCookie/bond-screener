@@ -26,6 +26,16 @@
   "triggers": {
     "crons": ["*/1 4-8 * * *"],
   },
+  // `/api/bond/*`가 D1을 직접 때리는 라우트를 IP당 요청 수로 보호한다. namespace_id는
+  // 사전에 생성할 리소스가 아니라 계정 내에서 임의로 고유하게 붙이는 식별자다.
+  "ratelimits": [
+    {
+      "name": "BOND_API_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 },
+    },
+  ],
+
   "d1_databases": [
     {
       "binding": "DB",
