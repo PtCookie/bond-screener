@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
+import sitemap from "@astrojs/sitemap";
 import cloudflare from "@astrojs/cloudflare";
 import tailwindcss from "@tailwindcss/vite";
 import { env } from "node:process";
@@ -12,7 +13,9 @@ const isVitest = !!env.VITEST;
 export default defineConfig({
   output: "server",
 
-  integrations: [react()],
+  site: "https://bond-screener.ptcookie.net",
+
+  integrations: [react(), sitemap()],
 
   vite: {
     plugins: [tailwindcss()],
