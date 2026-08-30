@@ -15,7 +15,7 @@ interface ScreenerTableProps {
 }
 
 /** 1열(종목명)을 좌측 sticky로 고정 — 13컬럼 가로 스크롤에서 종목명이 사라지면 표를 읽을 수 없다. */
-const STICKY_FIRST_COL = "sticky left-0 z-10 bg-background group-hover/row:bg-muted";
+const STICKY_FIRST_COL = "sticky left-0 z-10 bg-background";
 
 export function ScreenerTable({ table, isLoading, onResetFilters }: ScreenerTableProps) {
   if (isLoading) return <ScreenerSkeleton />;
@@ -45,11 +45,19 @@ export function ScreenerTable({ table, isLoading, onResetFilters }: ScreenerTabl
       </TableHeader>
       <TableBody>
         {rows.map((row) => (
-          <TableRow key={row.id} className="group/row">
+          <TableRow
+            key={row.id}
+            className="group/row cursor-pointer hover:bg-transparent"
+            onClick={(e) => {
+              if ((e.target as HTMLElement).closest("a, button")) return;
+              window.location.href = `/bond/${row.original.isinCd}`;
+            }}
+          >
             {row.getAllCells().map((cell, idx) => (
               <TableCell
                 key={cell.id}
                 className={cn(
+                  "group-hover/row:bg-muted/50",
                   idx === 0 && STICKY_FIRST_COL,
                   cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
                   idx === row.getAllCells().length - 4 && "border-l",
