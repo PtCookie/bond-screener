@@ -50,7 +50,7 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 - Custom Domain은 대시보드 조작 없이 `wrangler.jsonc`만으로 붙는다: `"workers_dev": false` + `"routes": [{ "pattern": "<domain>", "custom_domain": true }]` 후 `wrangler deploy` — DNS 레코드·인증서 발급까지 Cloudflare가 자동 처리한다.
 - `@astrojs/cloudflare` 14.2.x부터 빌드 시 `imageService` 기본값이 `cloudflare-binding`으로 바뀌어 `IMAGES`/`SESSION` 바인딩을 자동으로 켜고 경고를 띄운다 — `astro:assets`의 `<Image>`나 Astro Sessions를 안 쓰면(이 프로젝트는 둘 다 안 씀) 무해한 경고이니 `wrangler.jsonc`에 억지로 바인딩을 추가하지 말 것.
 - Workers Rate Limiting 바인딩(`ratelimits`, `env.<NAME>.limit({key})`)은 로컬 `astro dev`/Miniflare에서 전혀 제한하지 않는다(실측: 40연속 요청 전부 200) — wrangler의 바인딩 지원표엔 `ratelimit: "local-only"`로 잡혀 있지만 실제 로컬 시뮬레이터가 없다. 반드시 배포 후 프로덕션에서 검증할 것. 카운터도 전역이 아니라 **Cloudflare 위치(colo)별**이라 같은 클라이언트가 요청마다 다른 카운터에 걸릴 수 있음(공식 문서에 명시된 근사치 설계) — 정확한 전역 한도가 아니라 남용 방지용 근사치로만 쓸 것.
-- `git log`상 최신 커밋과 실제 배포본이 다를 수 있다 — 예전엔 `wrangler deploy`가 순수 수동이라 커밋해도 자동 반영이 안 됐다(실제로 여러 날치 커밋이 배포 안 된 채 방치된 적 있음). 지금은 `production`/`main`에 push하면 CI/CD가 자동 배포하지만(2026-08-31부터, `git.ptcookie.net` 자체 호스팅), 배포 여부가 의심되면 `pnpm exec wrangler deployments list --config ./wrangler.jsonc`(오래된 순 정렬)로 마지막 배포 시각을 커밋 시각과 대조해 확인할 것.
+- `git log`상 최신 커밋과 실제 배포본이 다를 수 있다 — 예전엔 `wrangler deploy`가 순수 수동이라 커밋해도 자동 반영이 안 됐다(실제로 여러 날치 커밋이 배포 안 된 채 방치된 적 있음). 지금은 CI/CD가 연결돼 있지만(2026-08-31부터, `git.ptcookie.net` 자체 호스팅) **`production` 브랜치에 push할 때만 배포가 걸린다 — `main`에 커밋/병합해도 자동 배포되지 않는다.** 배포 여부가 의심되면 `pnpm exec wrangler deployments list --config ./wrangler.jsonc`(오래된 순 정렬)로 마지막 배포 시각을 커밋 시각과 대조해 확인할 것.
 - 이 저장소의 git remote는 GitHub가 아니라 자체 호스팅 `git.ptcookie.net`이다 — `gh` CLI 사용 불가. PR 관련 작업은 시도하지 말고 사용자에게 방법을 물을 것.
 
 ## Tech Stack
