@@ -7,7 +7,10 @@
 //   node scripts/backfill.mjs fetch price [--from Y] [--to Y] 시세 월단위 수집(원본만, D1 미적재)
 //   node scripts/backfill.mjs build-sql --source issu|price   원본 → .sql 파일 생성(D1 미적재)
 //   node scripts/backfill.mjs apply --source issu|price [--remote|--local] [--budget 90000]
-//   node scripts/backfill.mjs status                          진행 상황 요약
+//     --remote는 state.json에 적용 이력·일일 write 예산을 기록/체크한다(D1 free tier 한도 보호).
+//     --local은 그 한도가 없는 Miniflare SQLite라 상태를 읽지도 쓰지도 않고 매번 전체 청크를
+//     전량 적용한다(생성 SQL이 ON CONFLICT DO NOTHING이라 재실행해도 안전).
+//   node scripts/backfill.mjs status                          진행 상황 요약(원격 기준)
 //
 // fetch(네트워크·API 일일 쿼터)와 apply(D1 write 일일 한도)를 분리했다 — 한쪽이 한도에
 // 걸려도 다른 쪽을 다시 안 돌린다. 모든 단계는 .backfill/state.json에 진행 상황을 원자적으로
@@ -376,7 +379,13 @@ function addDailyWritesUsed(state, actualRows) {
   state.dailyWrites[today] = (state.dailyWrites[today] ?? 0) + actualRows;
 }
 
-/** `wrangler d1 execute --file --json`을 실행하고 실제 rows_written을 반환한다. */
+/**
+ * `wrangler d1 execute --file --json`을 실행하고 실제 rows_written을 반환한다.
+ * remote는 이 값이 일일 write 예산 회계에 필수라 못 찾으면 throw한다. local은
+ * 그 회계 자체가 없으므로(아래 cmdApply 참고) 못 찾아도 null을 반환해 적재를
+ * 막지 않는다 — Miniflare가 meta 형태를 다르게 주더라도 56만 행 적재가 중간에
+ * 멈추지 않아야 한다.
+ */
 function executeSqlFile(databaseName, target, filePath) {
   const output = execFileSync(
     "pnpm",
@@ -393,7 +402,7 @@ function executeSqlFile(databaseName, target, filePath) {
       "--json",
       "-y",
     ],
-    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
+    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV, maxBuffer: 64 * 1024 * 1024 },
   );
   // wrangler --json은 배열([{results, success, meta}])을 stdout에 찍지만 그 앞뒤로
   // 프록시/텔레메트리 경고 등 비-JSON 라인이 섞여 나올 수 있어 첫 '['부터 파싱한다.
@@ -401,21 +410,41 @@ function executeSqlFile(databaseName, target, filePath) {
   const parsed = JSON.parse(output.slice(jsonStart));
   const rowsWritten = parsed[0]?.meta?.rows_written;
   if (typeof rowsWritten !== "number") {
+    if (target === "local") return null;
     throw new Error(`wrangler 출력에서 rows_written을 찾지 못함: ${output.slice(0, 500)}`);
   }
   return rowsWritten;
 }
 
+// local은 D1 free tier write 한도가 애초에 없는 Miniflare SQLite다. remote와 달리
+// state.json을 읽지도 쓰지도 않고, 실행할 때마다 전체 청크를 전량 적용한다 — 생성된
+// SQL이 전부 `ON CONFLICT DO NOTHING`이라 재실행해도 안전하다(멱등). 이렇게 분리해야
+// remote의 `applied`/`dailyWrites` 장부(=원격에 실제로 적용된 이력)가 local 실행으로
+// 오염되지 않는다.
 function cmdApply(source, target, budget) {
+  // state.json은 build-sql이 만들어 둔 청크 목록(파일 경로·행 수)의 유일한 출처라
+  // local도 읽어야 하지만, local 경로는 이 값을 다시 쓰지 않는다(아래 참고).
   const state = loadState();
-  const bucket = source === "issu" ? state.issu : state.price;
-  const chunks = bucket.sqlChunks ?? [];
+  const chunks = (source === "issu" ? state.issu : state.price).sqlChunks ?? [];
   if (chunks.length === 0) {
     console.error(`적용할 SQL 청크가 없습니다. 먼저 \`build-sql --source ${source}\`를 실행하세요.`);
     process.exit(1);
   }
 
   const databaseName = readDatabaseName();
+
+  if (target === "local") {
+    console.log(`local 타깃 — 상태 기록·write 예산 없이 청크 ${chunks.length}개를 전량 적용합니다.`);
+    for (const chunk of chunks) {
+      const filePath = path.join(PROJECT_ROOT, chunk.file);
+      console.log(`적용 중: ${chunk.file} (${chunk.rows}행 선언, local)`);
+      const actualRowsWritten = executeSqlFile(databaseName, target, filePath);
+      console.log(`  → 실제 D1 write: ${actualRowsWritten ?? "n/a"}행`);
+    }
+    console.log(`\n이번 실행: ${chunks.length}개 청크 전량 적용 (local, state.json 미변경).`);
+    return;
+  }
+
   let appliedCount = 0;
   let actualWrittenThisRun = 0;
 
@@ -464,7 +493,7 @@ function cmdApply(source, target, budget) {
 
 function cmdStatus() {
   const state = loadState();
-  console.log("=== 채권 D1 백필 진행 상황 ===\n");
+  console.log("=== 채권 D1 백필 진행 상황 (원격 기준 — local apply는 state.json을 건드리지 않음) ===\n");
 
   console.log(`[기본정보] basDt=${state.issu.basDt ?? "(미수집)"}  수집=${state.issu.fetched}`);
   summarizeChunks(state.issu.sqlChunks);
@@ -518,6 +547,8 @@ function usage() {
   node scripts/backfill.mjs fetch price [--from YYYYMMDD] [--to YYYYMMDD]
   node scripts/backfill.mjs build-sql --source issu|price
   node scripts/backfill.mjs apply --source issu|price [--remote|--local] [--budget 90000]
+    --remote: state.json에 적용 이력·일일 write 예산을 기록/체크한다.
+    --local:  상태를 읽지도 쓰지도 않고 매번 전체 청크를 전량 적용한다(--budget 무시).
   node scripts/backfill.mjs status`);
   process.exit(1);
 }

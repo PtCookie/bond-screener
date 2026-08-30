@@ -10,7 +10,8 @@
 // 골라 서빙하게 했으나, 로컬 dev(Miniflare)에서 실측한 결과 그 방식은 애초에 동작하지
 // 않았다(`src/lib/r2/keys.ts`의 `snapshotBondKey` 주석 참고) — 압축은 플랫폼에 맡길 것.
 //
-// 사용법: node scripts/build-snapshot.mjs [--remote|--local]
+// 사용법: node scripts/build-snapshot.mjs --remote|--local (필수 — 무인자 실행은 운영
+// D1/R2를 건드릴 수 있어 명시를 강제한다)
 //
 // 산출물: snapshot/bond/{basDt}.json(v2 포맷, 컬럼지향+발행인사전화+epoch day —
 // `src/lib/snapshot/format.ts` 참고) + snapshot/index.json 갱신.
@@ -47,7 +48,10 @@ function wranglerD1Query(sql, target) {
     ],
     { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV, maxBuffer: 64 * 1024 * 1024 },
   );
-  const parsed = JSON.parse(out);
+  // wrangler --json 출력 앞뒤로 프록시/텔레메트리 경고 등 비-JSON 라인이 섞여 나올 수
+  // 있어 첫 '['부터 파싱한다(scripts/backfill.mjs의 executeSqlFile과 동일 방어).
+  const jsonStart = out.indexOf("[");
+  const parsed = JSON.parse(out.slice(jsonStart));
   return parsed[0]?.results ?? [];
 }
 
@@ -60,7 +64,11 @@ function wranglerR2Put(bucket, key, filePath, target, extraArgs = []) {
 }
 
 async function main() {
-  const target = process.argv.includes("--local") ? "local" : "remote";
+  const target = process.argv.includes("--local") ? "local" : process.argv.includes("--remote") ? "remote" : null;
+  if (!target) {
+    console.error("--remote 또는 --local을 지정하세요.");
+    process.exit(1);
+  }
 
   console.log(`D1(${target})에서 bond + bond_state(현재값) + code_label + 종목별 최신시세 조회 중...`);
   const bondRows = wranglerD1Query(
@@ -103,17 +111,22 @@ async function main() {
   wranglerR2Put(bucket, key, jsonPath, target, ["--content-type=application/json"]);
 
   // index.json 갱신 — 시세 델타는 이 basDt 이전 것들을 정리(base가 이미 그 시점을 반영)
-  let index = { generatedAt: new Date().toISOString(), bond: null, priceDeltas: [] };
+  // 오브젝트 부재(최초 실행)만 빈 인덱스로 폴백한다. JSON 파싱 실패는 손상된 index를
+  // 조용히 덮어써 누적 priceDeltas를 날릴 수 있으므로 rethrow한다 — src/lib/r2/price-delta.ts의
+  // readIndex()와 동일한 규약.
+  let existing;
   try {
-    const existing = execFileSync(
+    existing = execFileSync(
       "pnpm",
       ["exec", "wrangler", "r2", "object", "get", `${bucket}/${SNAPSHOT_INDEX_KEY}`, `--${target}`, "--pipe"],
       { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV },
     );
-    index = JSON.parse(existing);
   } catch {
     // 최초 실행 — index.json 없음
   }
+  const index = existing
+    ? JSON.parse(existing)
+    : { generatedAt: new Date().toISOString(), bond: null, priceDeltas: [] };
   index.generatedAt = new Date().toISOString();
   index.bond = { key, basDt, count: payload.cols[0].length };
   index.priceDeltas = (index.priceDeltas ?? []).filter((d) => d.basDt > basDt);
