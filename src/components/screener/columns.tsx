@@ -67,9 +67,13 @@ export const screenerColumns = helper.columns([
     cell: (c) => {
       const v = c.getValue();
       return (
-        <span className="block max-w-[20rem] truncate" title={v ?? undefined}>
+        <a
+          href={`/bond/${c.row.original.isinCd}`}
+          className="block max-w-[20rem] truncate hover:underline"
+          title={v ?? undefined}
+        >
           {v ?? DASH}
-        </span>
+        </a>
       );
     },
   }),

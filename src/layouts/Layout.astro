@@ -22,5 +22,21 @@ const { title = "채권 스크리너", description = "공공데이터포털 채�
   </head>
   <body class="bg-background text-foreground min-h-dvh">
     <slot />
+    <!--
+      두 라이선스 고지를 한 곳에서 처리한다:
+      1) TradingView Lightweight Charts(Apache-2.0)가 요구하는 attribution notice + 링크.
+         차트 자체의 attributionLogo(v5 기본값 true, PriceChart.tsx 참고)로도 링크 요건은
+         충족되지만, NOTICE 문구 고지는 별도로 필요하다.
+      2) 공공데이터포털 금융위원회 채권기본정보/채권시세정보(공공누리 제2유형) 출처표시.
+    -->
+    <footer class="text-muted-foreground mx-auto max-w-[1400px] px-4 py-6 text-xs">
+      <p>
+        Powered by
+        <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" class="underline">
+          TradingView Lightweight Charts™</a
+        >. Copyright (с) 2025 TradingView, Inc.
+      </p>
+      <p>공공데이터포털 금융위원회 채권기본정보·채권시세정보 Open API 활용</p>
+    </footer>
   </body>
 </html>

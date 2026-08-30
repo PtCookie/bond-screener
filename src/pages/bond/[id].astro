@@ -1,0 +1,45 @@
+---
+/**
+ * 종목 상세 페이지. `/api/bond/[id]`를 다시 fetch하지 않고 repo·변환 계층을 서버에서
+ * 직접 호출한다 — AGENTS.md의 "서버에서 초기 데이터를 페칭해 island에 props로 전달"
+ * 패턴이자 API 라우트를 한 번 더 왕복하지 않아도 되는 절약.
+ *
+ * 가격 시계열은 여기서 SSR하지 않는다 — 기간·시장·지표 토글이 전부 클라이언트 상태라
+ * 처음부터 클라이언트에서 받는 것이 자연스럽고(`PriceChartCard`), 첫 렌더의 D1 예산도 아낀다.
+ *
+ * `env`는 `Astro.locals.runtime.env`가 아니라 `cloudflare:workers`에서 가져온다
+ * (`src/pages/api/bond/[id].ts`와 동일 규약).
+ */
+import { env } from "cloudflare:workers";
+import Layout from "@/layouts/Layout.astro";
+import { BondDetail } from "@/components/bond/BondDetail";
+import { fetchBondDetail, resolveIsinCd } from "@/lib/d1/detail-repo";
+import { toBondDetailResponse, type BondDetailApiResponse } from "@/lib/bond/detail";
+import { parseBondRef } from "@/lib/api/params";
+
+export const prerender = false;
+
+const ref = parseBondRef(Astro.params.id);
+if (!ref) return new Response(null, { status: 404 });
+
+const isinCd = await resolveIsinCd(env.DB, ref);
+if (!isinCd) return new Response(null, { status: 404 });
+
+const source = await fetchBondDetail(env.DB, isinCd);
+if (!source) return new Response(null, { status: 404 });
+
+const bondDetail = toBondDetailResponse(source);
+const detail: BondDetailApiResponse = {
+  isinCd,
+  srtnCd: (source.bond.srtn_cd as string | null) ?? null,
+  ...bondDetail,
+};
+
+const isinCdNm = (detail.bond.isinCdNm as string | null) ?? isinCd;
+---
+
+<Layout title={`${isinCdNm} | 채권 스크리너`}>
+  <main class="mx-auto max-w-[1400px] px-4 py-6">
+    <BondDetail detail={detail} client:load />
+  </main>
+</Layout>

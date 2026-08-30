@@ -14,7 +14,7 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { fetchBondDetail, resolveIsinCd } from "@/lib/d1/detail-repo";
-import { toBondDetailResponse } from "@/lib/bond/detail";
+import { toBondDetailResponse, type BondDetailApiResponse } from "@/lib/bond/detail";
 import { DETAIL_CACHE_CONTROL, errorResponse, jsonResponse, parseBondRef } from "@/lib/api/params";
 
 export const prerender = false;
@@ -30,8 +30,10 @@ export const GET: APIRoute = async ({ params }) => {
   if (!source) return errorResponse(404, "종목을 찾을 수 없습니다.");
 
   const detail = toBondDetailResponse(source);
-  return jsonResponse(
-    { isinCd, srtnCd: (source.bond.srtn_cd as string | null) ?? null, ...detail },
-    { cacheControl: DETAIL_CACHE_CONTROL },
-  );
+  const payload: BondDetailApiResponse = {
+    isinCd,
+    srtnCd: (source.bond.srtn_cd as string | null) ?? null,
+    ...detail,
+  };
+  return jsonResponse(payload, { cacheControl: DETAIL_CACHE_CONTROL });
 };

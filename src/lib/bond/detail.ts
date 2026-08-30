@@ -87,6 +87,17 @@ function toPriceFields(row: BondPriceRowRecord): Record<string, string | number 
   return out;
 }
 
+/**
+ * `GET /api/bond/[id]`이 실제로 응답하는 최상위 형태(`src/pages/api/bond/[id].ts`가
+ * `{ isinCd, srtnCd, ...toBondDetailResponse(source) }`로 조립하는 것과 정확히 같다).
+ * SSR 상세 페이지(`src/pages/bond/[id].astro`)가 같은 조합을 직접 만들어 React island에
+ * 넘길 때 이 타입을 공유한다.
+ */
+export interface BondDetailApiResponse extends BondDetailResponse {
+  isinCd: string;
+  srtnCd: string | null;
+}
+
 export function toBondDetailResponse(source: BondDetailSource): BondDetailResponse {
   const { bond, stateHistory, latestPrices, codeLabels } = source;
   return {
