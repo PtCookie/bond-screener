@@ -4,23 +4,28 @@
   // 커스텀 Workers 진입점. fetch는 @astrojs/cloudflare/handler의 handle에 위임하고
   // scheduled(cron)만 이 파일에서 직접 구현한다. src/worker.ts 참고.
   "main": "./src/worker.ts",
-  "compatibility_date": "2026-05-21",
+  "compatibility_date": "2026-08-15",
   "compatibility_flags": [
     "nodejs_compat",
     "global_fetch_strictly_public"
   ],
-
+  "workers_dev": false,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "bond-screener.ptcookie.net",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "binding": "ASSETS",
     "directory": "./dist",
   },
-
   // UTC 04:00-08:59 = KST 13:00-17:59. 오픈API 갱신이 "영업일+1일 오후 1시 이후"라
   // KST 13시 전에는 돌 이유가 없다. 매분 tick + sync_run 커서로 재개한다.
   "triggers": {
     "crons": ["*/1 4-8 * * *"],
   },
-
   "d1_databases": [
     {
       "binding": "DB",
@@ -29,7 +34,6 @@
       "migrations_dir": "migrations",
     },
   ],
-
   // `wrangler r2 bucket create bond-screener-archive` 실행 후에는 별도 ID 기입 불필요(이름으로 바인딩).
   "r2_buckets": [
     {
@@ -37,7 +41,6 @@
       "bucket_name": "bond-screener-archive",
     },
   ],
-
   "observability": {
     "logs": {
       "enabled": true,
