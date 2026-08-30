@@ -53,7 +53,7 @@ export function ScreenerFilterRange({
         <CaretDownIcon data-icon="inline-end" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64">
-        <div className="flex items-end gap-2">
+        <div className="flex flex-col gap-2">
           <div className="flex flex-1 flex-col gap-1">
             <span className="text-muted-foreground text-xs">최소</span>
             <Input
