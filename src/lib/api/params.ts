@@ -78,3 +78,16 @@ export function jsonResponse(data: unknown, init?: { status?: number; cacheContr
 export function errorResponse(status: number, message: string): Response {
   return jsonResponse({ error: message }, { status });
 }
+
+/**
+ * D1을 직접 때리는 라우트를 IP당 요청 수로 보호한다. 한도 초과 시 호출부가 그대로
+ * 반환할 429 Response를, 통과 시 `null`을 돌려준다. `cf-connecting-ip`가 없는 경우
+ * (로컬 개발 등) 모든 요청이 같은 키를 공유해 서로의 한도에 영향을 주지만, 프로덕션
+ * Workers 런타임에서는 Cloudflare가 항상 이 헤더를 채운다.
+ */
+export async function checkRateLimit(limiter: RateLimit, request: Request): Promise<Response | null> {
+  const key = request.headers.get("cf-connecting-ip") ?? "unknown";
+  const { success } = await limiter.limit({ key });
+  if (success) return null;
+  return errorResponse(429, "요청이 너무 많습니다. 잠시 후 다시 시도하세요.");
+}

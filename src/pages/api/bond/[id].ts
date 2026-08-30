@@ -15,11 +15,14 @@ import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { fetchBondDetail, resolveIsinCd } from "@/lib/d1/detail-repo";
 import { toBondDetailResponse, type BondDetailApiResponse } from "@/lib/bond/detail";
-import { DETAIL_CACHE_CONTROL, errorResponse, jsonResponse, parseBondRef } from "@/lib/api/params";
+import { checkRateLimit, DETAIL_CACHE_CONTROL, errorResponse, jsonResponse, parseBondRef } from "@/lib/api/params";
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, request }) => {
+  const limited = await checkRateLimit(env.BOND_API_LIMITER, request);
+  if (limited) return limited;
+
   const ref = parseBondRef(params.id);
   if (!ref) return errorResponse(400, "id는 12자리 ISIN 또는 9자리 단축코드여야 합니다.");
 

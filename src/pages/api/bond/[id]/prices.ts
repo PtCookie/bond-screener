@@ -15,6 +15,7 @@ import { resolveIsinCd } from "@/lib/d1/detail-repo";
 import { fetchBondPriceSeries } from "@/lib/d1/price-repo";
 import { toPriceSeriesResponse } from "@/lib/bond/detail";
 import {
+  checkRateLimit,
   DETAIL_CACHE_CONTROL,
   errorResponse,
   jsonResponse,
@@ -28,7 +29,10 @@ export const prerender = false;
 /** 무제한 스캔 방지용 상한. 일별 시세라 3,000행이면 약 12년치 — 실사용 범위를 넉넉히 커버한다. */
 const PRICE_SERIES_LIMIT = 3000;
 
-export const GET: APIRoute = async ({ params, url }) => {
+export const GET: APIRoute = async ({ params, url, request }) => {
+  const limited = await checkRateLimit(env.BOND_API_LIMITER, request);
+  if (limited) return limited;
+
   const ref = parseBondRef(params.id);
   if (!ref) return errorResponse(400, "id는 12자리 ISIN 또는 9자리 단축코드여야 합니다.");
 
