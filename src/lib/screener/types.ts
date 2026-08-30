@@ -1,10 +1,11 @@
 import type { RowData, TableFeatures } from "@tanstack/react-table";
 
 /**
- * 스크리너 화면에 표시할 채권 1건. 실 데이터 연동 전까지는 mock.ts의 리터럴로만 채워진다.
+ * 스크리너 화면에 표시할 채권 1건. `decodeSnapshot`(`src/lib/snapshot/decode.ts`)이
+ * R2 스냅샷을 이 타입으로 푼다.
  *
- * 코드와 라벨을 함께 들고 가는 이유: 지금은 필터가 비활성 껍데기라 안 쓰지만, 나중에
- * 필터가 살아날 때 라벨 문자열 매칭이 아니라 코드로 비교하게 하기 위함(라벨은 표시 전용).
+ * 코드와 라벨을 함께 들고 가는 이유: `src/lib/screener/filters.ts`의 다중선택 필터가
+ * 라벨 문자열이 아니라 코드로 비교하기 위함(라벨은 표시 전용).
  */
 export interface ScreenerRow {
   /** ISIN 코드. React key(getRowId)로도 사용. */
@@ -22,7 +23,7 @@ export interface ScreenerRow {
   bondBal: number | null;
   bondIntTcd: string | null;
   bondIntTcdNm: string | null;
-  /** "KTS" | "일반채권" | "소액채권". 향후 시장별 뷰 확장 대비 — 이번 UI에는 표시하지 않음. */
+  /** "KTS" | "일반채권" | "소액채권". 표에는 표시하지 않지만 시장구분 필터가 사용한다. */
   mrktCtg: string | null;
   clprPrc: number | null;
   clprVs: number | null;

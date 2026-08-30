@@ -1,6 +1,7 @@
 import { CaretDoubleLeftIcon, CaretDoubleRightIcon, CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 import type { ReactTable } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
+import { PAGE_SIZE_OPTIONS } from "@/lib/screener/view-state";
 import { cn } from "@/lib/utils";
 import type { screenerFeatures } from "./columns";
 import type { ScreenerRow } from "@/lib/screener/types";
@@ -9,8 +10,6 @@ interface ScreenerPaginationProps {
   table: ReactTable<typeof screenerFeatures, ScreenerRow>;
   totalCount: number;
 }
-
-const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
 export function ScreenerPagination({ table, totalCount }: ScreenerPaginationProps) {
   const { pageIndex, pageSize } = table.state.pagination;
