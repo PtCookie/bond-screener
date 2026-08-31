@@ -30,3 +30,16 @@ pnpm-debug.log*
 # 초기 백필 스크립트(scripts/backfill.mjs)의 중간 산출물 — 원본 응답·생성 SQL·재개 상태.
 # 용량이 크고(수백 MB) 재생성 가능하므로 커밋하지 않는다.
 .backfill/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Vitest Browser Mode 실패 스크린샷·첨부파일 — 각 테스트 파일 옆에 __screenshots__/로
+# 생기고(중첩 디렉터리 전부 매치하도록 슬래시 없이 둔다), 첨부파일은 프로젝트 루트
+# .vitest-attachments/에 쌓인다.
+__screenshots__/
+/.vitest-attachments/
