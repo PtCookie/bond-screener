@@ -1,29 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { EMPTY_FILTERS, applyFilters, buildFilterOptions, countActiveFilters } from "@/lib/screener/filters";
-import type { ScreenerRow } from "@/lib/screener/types";
-
-function makeRow(overrides: Partial<ScreenerRow> = {}): ScreenerRow {
-  return {
-    isinCd: "KR0000000000",
-    isinCdNm: "테스트채권",
-    bondIsurNm: "테스트발행사",
-    scrsItmsKcd: "01",
-    scrsItmsKcdNm: "회사채",
-    bondIssuDt: 20200101,
-    bondExprDt: 20250101,
-    bondSrfcInrt: 3.5,
-    kisGrade: "AAA",
-    bondBal: 100_000_000_000,
-    bondIntTcd: "01",
-    bondIntTcdNm: "이표채",
-    mrktCtg: "일반채권",
-    clprPrc: 10000,
-    clprVs: 10,
-    clprBnfRt: 3.2,
-    trqu: 5000,
-    ...overrides,
-  };
-}
+import { makeScreenerRow as makeRow } from "./helpers/screener-row";
 
 describe("applyFilters", () => {
   test("활성 필터가 없으면 원본 배열을 그대로(동일 참조) 반환한다", () => {

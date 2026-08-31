@@ -11,6 +11,7 @@
       "Bash(pnpm test:*)",
       "Bash(pnpm exec astro:*)",
       "Bash(pnpm exec wrangler:*)",
+      "Bash(pnpm exec playwright:*)",
       "Bash(lefthook:*)",
       "Bash(git log:*)",
       "Bash(git diff:*)",
@@ -44,7 +45,9 @@
   "sandbox": {
     "excludedCommands": [
       "pnpm dev *",
-      "pnpm exec wrangler *"
+      "pnpm test *",
+      "pnpm exec wrangler *",
+      "pnpm exec playwright *"
     ],
     "network": {
       "allowLocalBinding": true,

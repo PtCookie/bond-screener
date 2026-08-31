@@ -37,6 +37,10 @@ declare module "@tanstack/react-table" {
   interface ColumnMeta<in out TFeatures extends TableFeatures, in out TData extends RowData, TValue = unknown> {
     /** 숫자 컬럼의 정렬 방향을 헤더/셀에 함께 전달하기 위한 표시용 메타. */
     align?: "start" | "end";
+    /** 고정 열 너비(rem). colgroup과 테이블 min-width 계산에 사용. */
+    width?: number;
+    /** 시세 그룹의 첫 컬럼 표시 — 좌측 구분선(border-l)을 그린다. */
+    groupStart?: true;
   }
 }
 /* eslint-enable @typescript-eslint/no-unused-vars */

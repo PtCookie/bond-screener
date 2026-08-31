@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { parseBondRef, parseDateRange, parseMarket } from "@/lib/api/params";
+import {
+  checkRateLimit,
+  errorResponse,
+  jsonResponse,
+  parseBondRef,
+  parseDateRange,
+  parseMarket,
+} from "@/lib/api/params";
 
 describe("parseBondRef", () => {
   test("12자리 영숫자는 ISIN으로 분류된다", () => {
@@ -75,5 +82,69 @@ describe("parseMarket", () => {
   test("유효하지 않은 값은 오류", () => {
     const result = parseMarket(new URLSearchParams({ market: "코스피" }));
     expect(result.ok).toBe(false);
+  });
+});
+
+describe("jsonResponse", () => {
+  test("기본 상태 코드는 200이고 Content-Type이 application/json이다", async () => {
+    const res = jsonResponse({ a: 1 });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("application/json; charset=utf-8");
+    expect(await res.json()).toEqual({ a: 1 });
+  });
+
+  test("status를 지정하면 그대로 반영된다", () => {
+    const res = jsonResponse({}, { status: 201 });
+    expect(res.status).toBe(201);
+  });
+
+  test("cacheControl을 지정하면 헤더가 설정되고, 생략하면 설정되지 않는다", () => {
+    const withCache = jsonResponse({}, { cacheControl: "public, max-age=60" });
+    expect(withCache.headers.get("cache-control")).toBe("public, max-age=60");
+
+    const withoutCache = jsonResponse({});
+    expect(withoutCache.headers.has("cache-control")).toBe(false);
+  });
+});
+
+describe("errorResponse", () => {
+  test("{error: message} 본문과 지정한 status를 담은 JSON 응답을 만든다", async () => {
+    const res = errorResponse(404, "찾을 수 없습니다.");
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "찾을 수 없습니다." });
+  });
+});
+
+describe("checkRateLimit", () => {
+  function makeRequest(ip: string | null): Request {
+    const headers = new Headers();
+    if (ip !== null) headers.set("cf-connecting-ip", ip);
+    return new Request("https://example.com", { headers });
+  }
+
+  test("한도 이내면 null을 반환한다(통과)", async () => {
+    const limiter: RateLimit = { limit: async () => ({ success: true }) };
+    const result = await checkRateLimit(limiter, makeRequest("1.2.3.4"));
+    expect(result).toBeNull();
+  });
+
+  test("한도 초과면 429 Response를 반환한다", async () => {
+    const limiter: RateLimit = { limit: async () => ({ success: false }) };
+    const result = await checkRateLimit(limiter, makeRequest("1.2.3.4"));
+    expect(result).not.toBeNull();
+    expect(result?.status).toBe(429);
+    expect(await result?.json()).toEqual({ error: "요청이 너무 많습니다. 잠시 후 다시 시도하세요." });
+  });
+
+  test("cf-connecting-ip가 없으면 'unknown' 키로 조회한다(로컬 개발 등)", async () => {
+    let seenKey: string | undefined;
+    const limiter: RateLimit = {
+      limit: async (options) => {
+        seenKey = options.key;
+        return { success: true };
+      },
+    };
+    await checkRateLimit(limiter, makeRequest(null));
+    expect(seenKey).toBe("unknown");
   });
 });
