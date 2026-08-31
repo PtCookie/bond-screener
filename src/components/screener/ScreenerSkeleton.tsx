@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { screenerColumns } from "./columns";
 
-const SKELETON_COLUMN_COUNT = 13;
+const SKELETON_COLUMN_COUNT = screenerColumns.length;
 const SKELETON_ROW_COUNT = 10;
 
 /** 로딩 중 표시하는 스켈레톤. 실제 <Table>과 같은 컬럼 수로 폭 감을 맞춘다. */

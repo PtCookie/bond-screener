@@ -67,35 +67,54 @@ export const screenerColumns = helper.columns([
     cell: (c) => {
       const v = c.getValue();
       return (
-        <a href={`/bond/${c.row.original.isinCd}`} className="block max-w-[20rem] truncate" title={v ?? undefined}>
+        <a href={`/bond/${c.row.original.isinCd}`} className="block truncate" title={v ?? undefined}>
           {v ?? DASH}
         </a>
       );
     },
+    meta: { width: 16 },
   }),
   helper.accessor("bondIsurNm", {
     header: "발행인",
-    cell: (c) => c.getValue() ?? DASH,
+    cell: (c) => {
+      const v = c.getValue();
+      return (
+        <span className="block truncate" title={v ?? undefined}>
+          {v ?? DASH}
+        </span>
+      );
+    },
+    meta: { width: 10 },
   }),
   helper.accessor("scrsItmsKcdNm", {
     header: "종류",
-    cell: (c) => c.getValue() ?? DASH,
+    cell: (c) => {
+      const v = c.getValue();
+      return (
+        <span className="block truncate" title={v ?? undefined}>
+          {v ?? DASH}
+        </span>
+      );
+    },
+    meta: { width: 6 },
   }),
   helper.accessor("bondIssuDt", {
     header: "발행일",
     cell: (c) => fmtYmd(c.getValue()),
     sortFn: numericSortFn,
+    meta: { width: 6.5 },
   }),
   helper.accessor("bondExprDt", {
     header: "만기일",
     cell: (c) => fmtYmd(c.getValue()),
     sortFn: numericSortFn,
+    meta: { width: 6.5 },
   }),
   helper.accessor("bondSrfcInrt", {
     header: "표면이율",
     cell: (c) => fmtRate(c.getValue()),
     sortFn: numericSortFn,
-    meta: { align: "end" },
+    meta: { align: "end", width: 6 },
   }),
   helper.accessor("kisGrade", {
     header: "신용등급",
@@ -104,22 +123,31 @@ export const screenerColumns = helper.columns([
       return v ? <Badge variant="secondary">{v}</Badge> : DASH;
     },
     sortFn: gradeSortFn,
+    meta: { width: 6 },
   }),
   helper.accessor("bondBal", {
     header: "잔액",
     cell: (c) => fmtAmount(c.getValue()),
     sortFn: numericSortFn,
-    meta: { align: "end" },
+    meta: { align: "end", width: 6 },
   }),
   helper.accessor("bondIntTcdNm", {
     header: "이자유형",
-    cell: (c) => c.getValue() ?? DASH,
+    cell: (c) => {
+      const v = c.getValue();
+      return (
+        <span className="block truncate" title={v ?? undefined}>
+          {v ?? DASH}
+        </span>
+      );
+    },
+    meta: { width: 6 },
   }),
   helper.accessor("clprPrc", {
     header: "종가",
     cell: (c) => fmtPrice(c.getValue()),
     sortFn: numericSortFn,
-    meta: { align: "end" },
+    meta: { align: "end", width: 6, groupStart: true },
   }),
   helper.accessor("clprVs", {
     header: "전일대비",
@@ -130,18 +158,18 @@ export const screenerColumns = helper.columns([
       return <span className={toneClass}>{fmtDelta(v)}</span>;
     },
     sortFn: numericSortFn,
-    meta: { align: "end" },
+    meta: { align: "end", width: 6.5 },
   }),
   helper.accessor("clprBnfRt", {
     header: "수익률",
     cell: (c) => fmtRate(c.getValue()),
     sortFn: numericSortFn,
-    meta: { align: "end" },
+    meta: { align: "end", width: 6 },
   }),
   helper.accessor("trqu", {
     header: "거래량",
     cell: (c) => fmtAmount(c.getValue()),
     sortFn: numericSortFn,
-    meta: { align: "end" },
+    meta: { align: "end", width: 6 },
   }),
 ]);
