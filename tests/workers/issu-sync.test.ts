@@ -48,23 +48,26 @@ describe("runIssuSyncStep — 정상 경로", () => {
     expect(updatedRun).toMatchObject({ status: "done", next_page: 2, total_count: 3 });
   });
 
-  test("마지막 페이지 경계: totalCount=29087, ISSU_PAGE_SIZE=200 → page 145는 미완, 146에서 마감", async () => {
-    // 페이지 145: next_page(145) * 200 = 29000 < 29087 → 아직 안 끝남
-    const page145 = buildIssuItems(200, String(BAS_DT));
-    stubFetchOnce(200, buildEnvelope({ items: page145, totalCount: 29087, pageNo: 145 }));
+  test("마지막 페이지 경계: 마지막 페이지 이전은 미완, 마지막 페이지에서만 마감된다", async () => {
+    // 마지막 페이지에 87건만 남도록 totalCount을 페이지 크기의 배수보다 살짝 크게 잡는다.
+    const totalCount = ISSU_PAGE_SIZE * 29 + 87;
+    const secondLastPage = Math.floor(totalCount / ISSU_PAGE_SIZE); // 29
+    const lastPage = secondLastPage + 1; // 30
+
+    const pageBeforeLast = buildIssuItems(ISSU_PAGE_SIZE, String(BAS_DT));
+    stubFetchOnce(200, buildEnvelope({ items: pageBeforeLast, totalCount, pageNo: secondLastPage }));
 
     await startSyncRun(env.DB, "issu", BAS_DT, 1000);
-    const run145: SyncRun = { ...notNull(await getSyncRun(env.DB, "issu", BAS_DT)), next_page: 145 };
-    const result145 = await runIssuSyncStep(env, run145);
-    expect(result145.done).toBe(false); // 145*200=29000 < 29087
+    const runBeforeLast: SyncRun = { ...notNull(await getSyncRun(env.DB, "issu", BAS_DT)), next_page: secondLastPage };
+    const resultBeforeLast = await runIssuSyncStep(env, runBeforeLast);
+    expect(resultBeforeLast.done).toBe(false); // secondLastPage * ISSU_PAGE_SIZE < totalCount
 
-    // 페이지 146: 146*200=29200 >= 29087 → 마감
-    const page146 = buildIssuItems(87, String(BAS_DT));
-    stubFetchOnce(200, buildEnvelope({ items: page146, totalCount: 29087, pageNo: 146 }));
+    const lastPageItems = buildIssuItems(87, String(BAS_DT));
+    stubFetchOnce(200, buildEnvelope({ items: lastPageItems, totalCount, pageNo: lastPage }));
 
-    const run146: SyncRun = { ...notNull(await getSyncRun(env.DB, "issu", BAS_DT)), next_page: 146 };
-    const result146 = await runIssuSyncStep(env, run146);
-    expect(result146.done).toBe(true);
+    const runLast: SyncRun = { ...notNull(await getSyncRun(env.DB, "issu", BAS_DT)), next_page: lastPage };
+    const resultLast = await runIssuSyncStep(env, runLast);
+    expect(resultLast.done).toBe(true); // lastPage * ISSU_PAGE_SIZE >= totalCount
   });
 
   test("totalCount이 페이지 크기의 정확한 배수일 때 그 페이지에서 바로 마감된다", async () => {

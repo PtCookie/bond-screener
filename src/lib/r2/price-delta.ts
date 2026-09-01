@@ -7,20 +7,17 @@
  */
 import type { BondPriceInfoItem } from "@/api";
 import { normReal, normText } from "@/lib/openapi/normalize";
+import { emptySnapshotIndex, type SnapshotIndex } from "@/lib/snapshot/index-file";
 import { snapshotPriceDeltaKey, SNAPSHOT_INDEX_KEY, snapshotBondKey } from "./keys";
+
+/** `src/lib/snapshot/client.ts`가 기존 import 경로(`@/lib/r2/price-delta`)로 계속 쓸 수 있도록 재export. 정본은 `src/lib/snapshot/index-file.ts`. */
+export type { SnapshotIndex };
 
 /**
  * 스냅샷 소비자가 필요한 최소 필드만 배열 포맷으로 담는다(키 반복 제거로 페이로드 절감).
  * `src/lib/snapshot/merge.ts`의 `PriceDeltaPayload`가 이 정본을 그대로 참조한다.
  */
 export const DELTA_COLUMNS = ["isinCd", "mrktCtg", "clprPrc", "clprVs", "clprBnfRt", "trqu"] as const;
-
-/** `src/lib/snapshot/client.ts`가 클라이언트에서 fetch할 때도 그대로 쓰는 index.json 스키마. */
-export interface SnapshotIndex {
-  generatedAt: string;
-  bond: { key: string; basDt: number; count: number } | null;
-  priceDeltas: { key: string; basDt: number; count: number }[];
-}
 
 function buildDeltaRow(item: BondPriceInfoItem): (string | number | null)[] {
   return [
@@ -39,9 +36,13 @@ function buildDeltaRow(item: BondPriceInfoItem): (string | number | null)[] {
  * 덮어써 base 포인터와 누적 델타 목록이 영구 소실된다. 델타 쓰기가 시끄럽게 실패하는
  * 편이 인덱스를 조용히 날리는 것보다 낫다 — 다음 tick에서 재시도된다.
  */
-async function readIndex(bucket: R2Bucket): Promise<SnapshotIndex> {
+/**
+ * `src/lib/snapshot/build.ts`(cron 스냅샷 빌드)도 base 포인터를 갱신할 때 이 함수를
+ * 재사용한다 — "파싱 실패는 rethrow" 규약을 두 호출부가 어긋나지 않게 하기 위함.
+ */
+export async function readIndex(bucket: R2Bucket): Promise<SnapshotIndex> {
   const obj = await bucket.get(SNAPSHOT_INDEX_KEY);
-  if (!obj) return { generatedAt: new Date(0).toISOString(), bond: null, priceDeltas: [] };
+  if (!obj) return emptySnapshotIndex();
   return await obj.json<SnapshotIndex>();
 }
 

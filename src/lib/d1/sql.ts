@@ -154,3 +154,46 @@ export const CODE_LABEL_BY_PAIRS_SQL =
   `  SELECT json_extract(value, '$[0]') AS domain, json_extract(value, '$[1]') AS code\n` +
   `  FROM json_each(?1)\n` +
   `) AS j ON cl.domain = j.domain AND cl.code = j.code;`;
+
+// ---------------------------------------------------------------------------
+// 스크리너 목록 스냅샷 빌드(`src/lib/snapshot/build.ts`, cron이 호출) — 키셋
+// 페이지네이션으로 청크를 흘려 읽는다. Workers Paid에서도 isolate 메모리(128MB)는
+// 그대로라 `scripts/build-snapshot.mjs`처럼 전량을 한 번에 `all()`하지 않는다.
+// ---------------------------------------------------------------------------
+
+/**
+ * `bond` + `bond_state`(현재값) 키셋 페이지. `?1`=이전 청크의 마지막 isin_cd(최초 호출은
+ * `""` — 모든 실제 isin_cd보다 작다), `?2`=limit. `bond.isin_cd`가 PK, `bond_state` PK가
+ * `(isin_cd, valid_from)`이라 둘 다 인덱스 경로로 스캔된다.
+ */
+export const SNAPSHOT_BOND_PAGE_SQL =
+  `SELECT b.isin_cd, b.isin_cd_nm, b.bond_isur_nm, b.scrs_itms_kcd, b.bond_issu_dt,\n` +
+  `       b.bond_expr_dt, b.bond_srfc_inrt, b.bond_int_tcd, b.last_chg_bas_dt,\n` +
+  `       s.bond_bal, s.kis_grade\n` +
+  `FROM bond b\n` +
+  `LEFT JOIN bond_state s ON s.isin_cd = b.isin_cd AND s.valid_to IS NULL\n` +
+  `WHERE b.isin_cd > ?1\n` +
+  `ORDER BY b.isin_cd\n` +
+  `LIMIT ?2;`;
+
+/**
+ * 종목별 "최신" 시세 키셋 페이지. `bond_price` PK가 `(isin_cd, bas_dt, mrkt_ctg)
+ * WITHOUT ROWID`라 `isin_cd > ?1` 서브쿼리가 청크 범위만 훑는다(`scripts/build-snapshot.mjs`의
+ * 전량 `GROUP BY` 조인과 동일한 결과, 페이지 단위로만 나눈 것). `?1`=이전 청크의 마지막
+ * isin_cd, `?2`=limit. 같은 isin_cd가 KTS·일반채권 두 행으로 동시에 나오는 케이스는
+ * 전량 조회와 동일하게 그대로 둔다.
+ */
+export const SNAPSHOT_LATEST_PRICE_PAGE_SQL =
+  `SELECT p.isin_cd, p.bas_dt, p.mrkt_ctg, p.clpr_prc, p.clpr_vs, p.clpr_bnf_rt, p.trqu\n` +
+  `FROM bond_price p\n` +
+  `JOIN (\n` +
+  `  SELECT isin_cd, MAX(bas_dt) mx FROM bond_price\n` +
+  `  WHERE isin_cd > ?1\n` +
+  `  GROUP BY isin_cd\n` +
+  `  ORDER BY isin_cd\n` +
+  `  LIMIT ?2\n` +
+  `) m ON p.isin_cd = m.isin_cd AND p.bas_dt = m.mx\n` +
+  `ORDER BY p.isin_cd;`;
+
+/** `code_label` 전량 — 57행(2026-09 기준)뿐이라 페이지네이션 불필요. */
+export const SNAPSHOT_CODE_LABEL_SQL = `SELECT domain, code, label FROM code_label;`;
