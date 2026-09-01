@@ -1,8 +1,15 @@
 #!/usr/bin/env node
-// 스크리너 목록 화면용 기준 스냅샷을 D1에서 뽑아 R2에 올린다. 주 1회, Worker 밖(로컬/CI)에서
-// 실행한다 — 29,106행 JSON 조립이 Worker Free tier CPU 10ms 예산을 훌쩍 넘기기 때문이다.
+// 스크리너 목록 화면용 기준 스냅샷을 D1에서 뽑아 R2에 올린다.
+//
+// **정상 경로는 이제 cron이다** — Workers Paid 전환(2026-09) 후 `src/lib/sync/tick.ts`가
+// 주간 기본정보 갱신이 끝난 다음 tick에서 `src/lib/snapshot/build.ts`의
+// `buildAndPutSnapshot()`을 자동 호출한다(청크 페이지네이션으로 D1을 읽어 isolate
+// 메모리 128MB 제약을 피한다 — 이건 Paid에서도 그대로다). 이 스크립트는 이제
+// (a) 로컬 dev 시드(`pnpm snapshot:local`, `pnpm seed:local`의 일부) (b) cron
+// 파이프라인이 막혔을 때의 수동 원격 폴백(`--remote`) 용도로만 남는다.
+//
 // D1/R2 접근은 `wrangler d1 execute --json`과 `wrangler r2 object put`을 하위 프로세스로
-// 호출해서 한다(별도 API 클라이언트 불필요).
+// 호출해서 한다(별도 API 클라이언트 불필요) — cron 경로(D1 바인딩 직접 호출)와 다르다.
 //
 // 압축은 하지 않는다 — Cloudflare 엣지가 `application/json` 응답에 실제 클라이언트
 // Accept-Encoding 기준으로 gzip/brotli를 자동 적용한다(Worker CPU와 무관한 네트워크 계층
@@ -16,10 +23,12 @@
 // 산출물: snapshot/bond/{basDt}.json(v2 포맷, 컬럼지향+발행인사전화+epoch day —
 // `src/lib/snapshot/format.ts` 참고) + snapshot/index.json 갱신.
 //
-// 포맷 정본은 `src/lib/snapshot/format.ts`/`encode.ts` 한 벌뿐이다. `@/` 경로 별칭 없이
-// 작성돼 있어 Node 24의 type stripping으로 이 스크립트가 상대 경로로 직접 import한다 —
-// scripts/lib/*.mjs가 src/lib/bond/의 정규화·매핑 로직을 plain JS로 재구현해야 했던 것과
-// 같은 이중 구현 함정을 피하기 위함(AGENTS.md의 fingerprint 정합성 경고 참고).
+// 포맷 정본은 `src/lib/snapshot/format.ts`/`encode.ts`/`index-file.ts` 한 벌뿐이다.
+// `@/` 경로 별칭 없이 작성돼 있어 Node 24의 type stripping으로 이 스크립트가 상대
+// 경로로 직접 import한다 — scripts/lib/*.mjs가 src/lib/bond/의 정규화·매핑 로직을
+// plain JS로 재구현해야 했던 것과 같은 이중 구현 함정을 피하기 위함(AGENTS.md의
+// fingerprint 정합성 경고 참고). cron 경로(`src/lib/snapshot/build.ts`)도 이
+// `encodeSnapshot`/`applyBondSnapshotToIndex`를 그대로 재사용해 산출물이 갈리지 않는다.
 
 import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdtempSync } from "node:fs";
@@ -28,6 +37,7 @@ import path from "node:path";
 import { PROJECT_ROOT } from "./lib/env.mjs";
 import { readDatabaseName, readBucketName, WRANGLER_ENV } from "./lib/wrangler-config.mjs";
 import { encodeSnapshot } from "../src/lib/snapshot/encode.ts";
+import { applyBondSnapshotToIndex, emptySnapshotIndex } from "../src/lib/snapshot/index-file.ts";
 import { snapshotBondKey, SNAPSHOT_INDEX_KEY } from "../src/lib/r2/keys.ts";
 
 function wranglerD1Query(sql, target) {
@@ -124,15 +134,11 @@ async function main() {
   } catch {
     // 최초 실행 — index.json 없음
   }
-  const index = existing
-    ? JSON.parse(existing)
-    : { generatedAt: new Date().toISOString(), bond: null, priceDeltas: [] };
-  index.generatedAt = new Date().toISOString();
-  index.bond = { key, basDt, count: payload.cols[0].length };
-  index.priceDeltas = (index.priceDeltas ?? []).filter((d) => d.basDt > basDt);
+  const index = existing ? JSON.parse(existing) : emptySnapshotIndex();
+  const newIndex = applyBondSnapshotToIndex(index, { key, basDt, count: payload.cols[0].length });
 
   const indexPath = path.join(tmpDir, "index.json");
-  writeFileSync(indexPath, JSON.stringify(index));
+  writeFileSync(indexPath, JSON.stringify(newIndex));
   wranglerR2Put(bucket, SNAPSHOT_INDEX_KEY, indexPath, target, ["--content-type=application/json"]);
 
   console.log(`완료: basDt=${basDt}, ${payload.cols[0].length}행`);
