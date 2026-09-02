@@ -23,8 +23,11 @@
   },
   // UTC 04:00-08:59 = KST 13:00-17:59. 오픈API 갱신이 "영업일+1일 오후 1시 이후"라
   // KST 13시 전에는 돌 이유가 없다. 매분 tick + sync_run 커서로 재개한다.
-  // 주간 기본정보 갱신이 끝난 다음 tick에서 스크리너 스냅샷 빌드(src/lib/snapshot/build.ts)도
-  // 이 창 안에서 자동 실행된다 — 별도 cron 항목 불필요(src/lib/sync/plan.ts의 "snapshot" 액션 참고).
+  // 시세·기본정보 둘 다 매 영업일 이 창 안에서 수집된다(2026-09부터 — 기본정보도 예전엔
+  // 주 1회였지만 요일 게이트를 제거했다). 기본정보 수집이 오늘 대상 basDt로 끝난 다음
+  // tick에서 스크리너 스냅샷 파이프라인(base 전량 재빌드 또는 bond 델타)도 이 창 안에서
+  // 자동 실행된다 — 별도 cron 항목 불필요(src/lib/sync/plan.ts의 "snapshot"/"bondDelta"
+  // 액션, src/lib/sync/config.ts의 SNAPSHOT_REBUILD_WEEKDAY_KST 참고).
   "triggers": {
     "crons": ["*/1 4-8 * * *"],
   },

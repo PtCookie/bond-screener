@@ -9,9 +9,10 @@
  */
 import type { SnapshotIndex } from "@/lib/r2/price-delta";
 import type { PriceDeltaPayload } from "./merge";
-import { mergePriceDeltas } from "./merge";
+import { mergeBondDeltas, mergePriceDeltas } from "./merge";
 import { decodeSnapshot } from "./decode";
 import type { SnapshotPayload } from "./format";
+import type { BondDeltaPayload } from "./bond-delta";
 import type { ScreenerRow } from "@/lib/screener/types";
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -32,11 +33,16 @@ export async function fetchScreenerSnapshot(): Promise<ScreenerSnapshot> {
   const index = await fetchJson<SnapshotIndex>("/api/snapshot/index");
   if (!index.bond) throw new Error("스냅샷 index에 base(bond)가 없습니다 — pnpm snapshot 실행 필요");
 
-  const [base, deltas] = await Promise.all([
+  const [base, bondDeltas, priceDeltas] = await Promise.all([
     fetchJson<SnapshotPayload>(`/api/snapshot/bond/${index.bond.basDt}`),
+    Promise.all(
+      (index.bondDeltas ?? []).map((d) => fetchJson<BondDeltaPayload>(`/api/snapshot/bond-delta/${d.basDt}`)),
+    ),
     Promise.all(index.priceDeltas.map((d) => fetchJson<PriceDeltaPayload>(`/api/snapshot/price/${d.basDt}`))),
   ]);
 
-  const merged = mergePriceDeltas(base, deltas);
+  // bond를 먼저 병합해야, 그날 신규 상장된 종목이 있으면 이어지는 price 병합이 그 종목에
+  // 시세를 붙일 대상(rowByIsin)을 이미 갖고 있다.
+  const merged = mergePriceDeltas(mergeBondDeltas(base, bondDeltas), priceDeltas);
   return { rows: decodeSnapshot(merged), basDt: merged.basDt, priceBasDt: merged.priceBasDt };
 }

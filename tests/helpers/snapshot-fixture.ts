@@ -59,10 +59,12 @@ export function makeSnapshotPayload(bonds: SnapshotFixtureBond[] = [DEFAULT_BOND
 export function makeSnapshotIndex(
   payload: SnapshotPayload,
   priceDeltas: SnapshotIndex["priceDeltas"] = [],
+  bondDeltas: SnapshotIndex["bondDeltas"] = [],
 ): SnapshotIndex {
   return {
     generatedAt: new Date(0).toISOString(),
     bond: { key: `snapshot/bond/${payload.basDt}.json`, basDt: payload.basDt, count: payload.cols[0]?.length ?? 0 },
+    bondDeltas,
     priceDeltas,
   };
 }

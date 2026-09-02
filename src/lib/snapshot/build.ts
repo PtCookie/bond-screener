@@ -36,8 +36,17 @@ export interface SnapshotBuildResult {
  * 전체 스냅샷을 빌드해 R2(`snapshot/bond/{basDt}.json`)에 올리고 `index.json`의 base
  * 포인터를 갱신한다. `bond` 행이 하나도 없으면(운영에서는 나타나지 않아야 하는 상태)
  * `basDt=0`짜리 스냅샷을 만들지 않도록 에러를 던진다.
+ *
+ * @param targetBasDt 스냅샷의 basDt로 못박을 "수집 대상" basDt(호출자의 issu run이 그 날
+ *   조회한 basDt). `builder.finish()`가 기본으로 계산하는 `MAX(bond.last_chg_bas_dt)`를
+ *   쓰지 않는 이유: 그날 bond 정적 필드가 하나도 안 바뀌었으면(흔함 — 신용등급/잔액 같은
+ *   `bond_state`만 바뀐 날도 있다) 두 값이 어긋나 R2 키·`app_meta.snapshot_bas_dt`·
+ *   `planTick`의 basDt 비교가 서로 다른 날짜를 가리키게 된다. 그러면 (a) planTick이 매
+ *   tick마다 "아직 이 basDt로 스냅샷 안 만듦"으로 오판해 cron 창 내내 재빌드하거나,
+ *   (b) `bond_state`만 바뀐 날은 그 전날과 같은 R2 키에 다른 내용을 쓰게 되는데 그 키는
+ *   `immutable` 캐시라 클라이언트가 새 내용을 영영 못 받는다.
  */
-export async function buildAndPutSnapshot(env: SnapshotBuildEnv): Promise<SnapshotBuildResult> {
+export async function buildAndPutSnapshot(env: SnapshotBuildEnv, targetBasDt: number): Promise<SnapshotBuildResult> {
   const builder = createSnapshotBuilder();
 
   let bondCount = 0;
@@ -74,7 +83,7 @@ export async function buildAndPutSnapshot(env: SnapshotBuildEnv): Promise<Snapsh
   const codeLabelRows = await readSnapshotCodeLabels(env.DB);
   builder.setCodeLabels(codeLabelRows);
 
-  const payload = builder.finish();
+  const payload = builder.finish(targetBasDt);
   const json = JSON.stringify(payload);
   const key = snapshotBondKey(payload.basDt);
 

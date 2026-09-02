@@ -43,21 +43,18 @@
     ]
   },
   "sandbox": {
+    "network": {
+      "allowedDomains": [
+        "apis.data.go.kr",
+        "api.cloudflare.com"
+      ],
+      "allowLocalBinding": true
+    },
     "excludedCommands": [
       "pnpm dev *",
       "pnpm test *",
       "pnpm exec wrangler *",
       "pnpm exec playwright *"
-    ],
-    "network": {
-      "allowLocalBinding": true,
-      "allowedDomains": [
-        "apis.data.go.kr",
-        "api.cloudflare.com"
-      ]
-    }
-  },
-  "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true
+    ]
   }
 }

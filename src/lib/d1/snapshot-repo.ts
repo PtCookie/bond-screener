@@ -7,7 +7,12 @@
  * `isin_cd` 오름차순이 보장되어야 한다 — `src/lib/snapshot/encode.ts`의
  * `createSnapshotBuilder()`가 이 순서에 의존한다(발행인 사전 인덱스가 등장 순서로 결정됨).
  */
-import { SNAPSHOT_BOND_PAGE_SQL, SNAPSHOT_CODE_LABEL_SQL, SNAPSHOT_LATEST_PRICE_PAGE_SQL } from "./sql";
+import {
+  SNAPSHOT_BOND_CHANGED_SQL,
+  SNAPSHOT_BOND_PAGE_SQL,
+  SNAPSHOT_CODE_LABEL_SQL,
+  SNAPSHOT_LATEST_PRICE_PAGE_SQL,
+} from "./sql";
 
 export interface SnapshotBondRow {
   isin_cd: string;
@@ -62,5 +67,15 @@ export async function readSnapshotLatestPricePage(
 
 export async function readSnapshotCodeLabels(db: D1Database): Promise<SnapshotCodeLabelRow[]> {
   const result = await db.prepare(SNAPSHOT_CODE_LABEL_SQL).all<SnapshotCodeLabelRow>();
+  return result.results;
+}
+
+/**
+ * `basDt`에 변경된 bond 행 전부(`SNAPSHOT_BOND_CHANGED_SQL` 참고) — `src/lib/snapshot/bond-delta.ts`의
+ * 일일 델타 소스. 단일 쿼리라 페이지네이션이 없다 — 호출부가 `limit`을 `BOND_DELTA_MAX_ROWS + 1`로
+ * 걸어 "임계 초과"를 결과 길이로 판별한다.
+ */
+export async function readChangedBondRows(db: D1Database, basDt: number, limit: number): Promise<SnapshotBondRow[]> {
+  const result = await db.prepare(SNAPSHOT_BOND_CHANGED_SQL).bind(basDt, limit).all<SnapshotBondRow>();
   return result.results;
 }

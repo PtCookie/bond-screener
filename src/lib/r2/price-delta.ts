@@ -39,11 +39,16 @@ function buildDeltaRow(item: BondPriceInfoItem): (string | number | null)[] {
 /**
  * `src/lib/snapshot/build.ts`(cron 스냅샷 빌드)도 base 포인터를 갱신할 때 이 함수를
  * 재사용한다 — "파싱 실패는 rethrow" 규약을 두 호출부가 어긋나지 않게 하기 위함.
+ *
+ * `bondDeltas` 필드는 `bondDeltas` 도입(2026-09) 이후에 생겼다 — 그 전에 올라간 index.json은
+ * 이 필드가 아예 없으므로, 존재하지 않으면 빈 배열로 보정한다(구형 오브젝트를 읽고 바로
+ * 다시 쓰는 호출부가 그 필드를 날리지 않도록).
  */
 export async function readIndex(bucket: R2Bucket): Promise<SnapshotIndex> {
   const obj = await bucket.get(SNAPSHOT_INDEX_KEY);
   if (!obj) return emptySnapshotIndex();
-  return await obj.json<SnapshotIndex>();
+  const parsed = await obj.json<SnapshotIndex>();
+  return { ...parsed, bondDeltas: parsed.bondDeltas ?? [] };
 }
 
 export async function writePriceDelta(
@@ -68,7 +73,12 @@ export async function writePriceDelta(
         ].sort((a, b) => a.basDt - b.basDt)
       : index.priceDeltas.filter((d) => d.basDt > baseBasDt);
 
-  const newIndex: SnapshotIndex = { generatedAt: new Date().toISOString(), bond: index.bond, priceDeltas: deltas };
+  const newIndex: SnapshotIndex = {
+    generatedAt: new Date().toISOString(),
+    bond: index.bond,
+    bondDeltas: index.bondDeltas,
+    priceDeltas: deltas,
+  };
   await bucket.put(SNAPSHOT_INDEX_KEY, JSON.stringify(newIndex), {
     httpMetadata: { contentType: "application/json", cacheControl: "public, max-age=0, must-revalidate" },
   });

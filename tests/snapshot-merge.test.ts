@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { mergePriceDeltas, type PriceDeltaPayload } from "@/lib/snapshot/merge";
-import { ymdToEpochDay, type SnapshotPayload } from "@/lib/snapshot/format";
+import { mergeBondDeltas, mergePriceDeltas, type PriceDeltaPayload } from "@/lib/snapshot/merge";
+import { SNAPSHOT_BOND_COLUMNS, ymdToEpochDay, type SnapshotPayload } from "@/lib/snapshot/format";
+import type { BondDeltaPayload } from "@/lib/snapshot/bond-delta";
 
 function makeBase(): SnapshotPayload {
   return {
@@ -85,5 +86,157 @@ describe("mergePriceDeltas", () => {
     const merged = mergePriceDeltas(base, [delta(20260821, [["KR_B", "소액채권", 9500, 0, 5.0, 10]])]);
     const idx = merged.priceIsinCds.indexOf("KR_B");
     expect(merged.priceCols[merged.priceColumns.indexOf("clpr_vs")][idx]).toBe(0);
+  });
+});
+
+function makeBondBase(): SnapshotPayload {
+  return {
+    v: 2,
+    basDt: 20260818,
+    priceBasDt: null,
+    columns: SNAPSHOT_BOND_COLUMNS,
+    // 인덱스 0=KIS은행, 1=한국전력공사. KR_A는 0을 참조.
+    issuers: ["KIS은행", "한국전력공사"],
+    codeLabels: { scrsItmsKcd: { "10": "AAA" } },
+    cols: [
+      ["KR_A", "KR_B"], // isin_cd
+      ["KR_A_이름", "KR_B_이름"], // isin_cd_nm
+      [0, 1], // bond_isur_nm (사전 인덱스)
+      ["10", "20"], // scrs_itms_kcd
+      [ymdToEpochDay(20250101), ymdToEpochDay(20240101)], // bond_issu_dt
+      [ymdToEpochDay(20300101), ymdToEpochDay(20290101)], // bond_expr_dt
+      [3.5, 4.0], // bond_srfc_inrt
+      ["1", "2"], // bond_int_tcd
+      [1_000_000, 2_000_000], // bond_bal
+      ["AAA", "AA+"], // kis_grade
+    ],
+    priceColumns: ["bas_dt", "mrkt_ctg", "clpr_prc", "clpr_vs", "clpr_bnf_rt", "trqu"],
+    priceIsinCds: [],
+    priceCols: [[], [], [], [], [], []],
+  };
+}
+
+function bondDelta(
+  basDt: number,
+  rows: BondDeltaPayload["rows"],
+  codeLabels: BondDeltaPayload["codeLabels"] = {},
+): BondDeltaPayload {
+  return { basDt, columns: SNAPSHOT_BOND_COLUMNS, rows, codeLabels };
+}
+
+describe("mergeBondDeltas", () => {
+  test("델타가 없으면 base를 그대로 반환한다", () => {
+    const base = makeBondBase();
+    expect(mergeBondDeltas(base, [])).toBe(base);
+  });
+
+  test("기존 종목의 정적 필드를 델타 값으로 덮어쓴다(등급 변경)", () => {
+    const base = makeBondBase();
+    const merged = mergeBondDeltas(base, [
+      bondDelta(20260819, [
+        [
+          "KR_A",
+          "KR_A_이름",
+          "KIS은행",
+          "10",
+          ymdToEpochDay(20250101),
+          ymdToEpochDay(20300101),
+          3.5,
+          "1",
+          1_000_000,
+          "AA+",
+        ],
+      ]),
+    ]);
+    const idx = merged.cols[SNAPSHOT_BOND_COLUMNS.indexOf("isin_cd")].indexOf("KR_A");
+    expect(merged.cols[SNAPSHOT_BOND_COLUMNS.indexOf("kis_grade")][idx]).toBe("AA+");
+    expect(merged.basDt).toBe(20260819);
+  });
+
+  test("델타에만 있는 신규 상장 종목이 추가되고, 신규 발행인이 issuers 사전에 인턴된다", () => {
+    const base = makeBondBase();
+    const merged = mergeBondDeltas(base, [
+      bondDelta(20260819, [
+        [
+          "KR_C",
+          "KR_C_이름",
+          "신규발행인",
+          "30",
+          ymdToEpochDay(20260819),
+          ymdToEpochDay(20310101),
+          5.0,
+          "1",
+          500_000,
+          "A",
+        ],
+      ]),
+    ]);
+    const isinCol = merged.cols[SNAPSHOT_BOND_COLUMNS.indexOf("isin_cd")];
+    expect(isinCol).toContain("KR_C");
+    const idx = isinCol.indexOf("KR_C");
+    const issuerRef = merged.cols[SNAPSHOT_BOND_COLUMNS.indexOf("bond_isur_nm")][idx] as number;
+    expect(merged.issuers[issuerRef]).toBe("신규발행인");
+    // 기존 발행인 사전은 그대로 유지된 채 새 항목만 append됐다.
+    expect(merged.issuers.slice(0, 2)).toEqual(["KIS은행", "한국전력공사"]);
+  });
+
+  test("codeLabels는 가장 최신 델타 것으로 통째로 교체된다", () => {
+    const base = makeBondBase();
+    const merged = mergeBondDeltas(base, [bondDelta(20260819, [], { scrsItmsKcd: { "10": "AAA", "99": "신규코드" } })]);
+    expect(merged.codeLabels).toEqual({ scrsItmsKcd: { "10": "AAA", "99": "신규코드" } });
+  });
+
+  test("base 배열을 변형하지 않는다(얕은 복사)", () => {
+    const base = makeBondBase();
+    const originalCols = base.cols.map((c) => [...c]);
+    const originalIssuers = [...base.issuers];
+    mergeBondDeltas(base, [
+      bondDelta(20260819, [
+        [
+          "KR_A",
+          "KR_A_이름",
+          "KIS은행",
+          "10",
+          ymdToEpochDay(20250101),
+          ymdToEpochDay(20300101),
+          3.5,
+          "1",
+          1_000_000,
+          "AA+",
+        ],
+      ]),
+    ]);
+    expect(base.cols).toEqual(originalCols);
+    expect(base.issuers).toEqual(originalIssuers);
+  });
+
+  test("bond 델타를 price 델타보다 먼저 병합하면, 그날 신규 상장된 종목에 같은 날 시세가 붙는다", () => {
+    const base = makeBondBase();
+    const bondMerged = mergeBondDeltas(base, [
+      bondDelta(20260819, [
+        [
+          "KR_C",
+          "KR_C_이름",
+          "신규발행인",
+          "30",
+          ymdToEpochDay(20260819),
+          ymdToEpochDay(20310101),
+          5.0,
+          "1",
+          500_000,
+          "A",
+        ],
+      ]),
+    ]);
+    const priceMerged = mergePriceDeltas(bondMerged, [
+      {
+        basDt: 20260819,
+        columns: ["isinCd", "mrktCtg", "clprPrc", "clprVs", "clprBnfRt", "trqu"],
+        rows: [["KR_C", "일반채권", 9800, 5, 4.2, 100]],
+      },
+    ]);
+    expect(priceMerged.priceIsinCds).toContain("KR_C");
+    const idx = priceMerged.priceIsinCds.indexOf("KR_C");
+    expect(priceMerged.priceCols[priceMerged.priceColumns.indexOf("clpr_prc")][idx]).toBe(9800);
   });
 });

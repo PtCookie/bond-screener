@@ -62,6 +62,12 @@ function toCell(v: string | number | null | undefined): SnapshotCell {
 /**
  * 스트리밍 스냅샷 빌더. `addBondRow`/`addPriceRow`를 isin_cd 오름차순으로 호출하고,
  * `setCodeLabels`를 아무 때나(순서 무관) 호출한 뒤 `finish()`로 `SnapshotPayload`를 얻는다.
+ *
+ * `finish(basDtOverride)` — 생략하면 기존처럼 `MAX(bond.last_chg_bas_dt)`를 basDt로 쓴다.
+ * cron 경로(`src/lib/snapshot/build.ts`)는 "그날 bond 정적 필드가 하나도 안 바뀌어도"
+ * 수집 대상 basDt를 스냅샷 basDt로 못박아야 하므로(R2 키·index·app_meta 정체성을 일치시키기
+ * 위함 — AGENTS.md 참고) 이 값을 넘긴다. `scripts/build-snapshot.mjs`(수동 폴백)는 "수집
+ * 대상"이라는 개념이 없어 생략한다.
  */
 export function createSnapshotBuilder() {
   const issuers: string[] = [];
@@ -124,10 +130,10 @@ export function createSnapshotBuilder() {
       codeLabels = next;
     },
 
-    finish(): SnapshotPayload {
+    finish(basDtOverride?: number): SnapshotPayload {
       return {
         v: SNAPSHOT_VERSION,
-        basDt,
+        basDt: basDtOverride ?? basDt,
         priceBasDt,
         columns: SNAPSHOT_BOND_COLUMNS,
         issuers,
@@ -189,7 +195,7 @@ export interface EncodeSnapshotInput {
  * `bondRows`를 `isin_cd` 오름차순으로 정렬하고, `bond_state` 현재값을 Map으로 조인해
  * 순서대로 빌더에 밀어 넣는다.
  */
-export function encodeSnapshot(input: EncodeSnapshotInput): SnapshotPayload {
+export function encodeSnapshot(input: EncodeSnapshotInput, basDtOverride?: number): SnapshotPayload {
   const { bondRows, stateRows, codeLabelRows, latestPriceRows } = input;
 
   const stateByIsin = new Map(stateRows.map((r) => [r.isin_cd, r]));
@@ -206,5 +212,5 @@ export function encodeSnapshot(input: EncodeSnapshotInput): SnapshotPayload {
   builder.setCodeLabels(codeLabelRows);
   for (const row of sortedPrices) builder.addPriceRow(row);
 
-  return builder.finish();
+  return builder.finish(basDtOverride);
 }

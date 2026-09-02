@@ -197,3 +197,21 @@ export const SNAPSHOT_LATEST_PRICE_PAGE_SQL =
 
 /** `code_label` 전량 — 57행(2026-09 기준)뿐이라 페이지네이션 불필요. */
 export const SNAPSHOT_CODE_LABEL_SQL = `SELECT domain, code, label FROM code_label;`;
+
+/**
+ * 특정 basDt에 변경된 bond 행만 조회(`src/lib/snapshot/bond-delta.ts`의 일일 델타 소스).
+ * `SNAPSHOT_BOND_PAGE_SQL`과 SELECT 목록은 동일하고 WHERE만 다르다 — "이 basDt에 bond
+ * 정적 필드가 바뀌었거나(`last_chg_bas_dt`), bond_state가 바뀐(`valid_from`) 종목" 전부를
+ * 잡는다. `writeBondPage`가 upsert할 때마다 `last_chg_bas_dt = basDt`를 쓰고 상태 변경은
+ * `bond_state.valid_from = basDt`로 남기므로, 이 두 조건의 합집합이 그날의 변경분 전체와
+ * 정확히 일치한다. `?1`=basDt, `?2`=limit. 안전밸브(`BOND_DELTA_MAX_ROWS`)는 호출부가 건다.
+ */
+export const SNAPSHOT_BOND_CHANGED_SQL =
+  `SELECT b.isin_cd, b.isin_cd_nm, b.bond_isur_nm, b.scrs_itms_kcd, b.bond_issu_dt,\n` +
+  `       b.bond_expr_dt, b.bond_srfc_inrt, b.bond_int_tcd, b.last_chg_bas_dt,\n` +
+  `       s.bond_bal, s.kis_grade\n` +
+  `FROM bond b\n` +
+  `LEFT JOIN bond_state s ON s.isin_cd = b.isin_cd AND s.valid_to IS NULL\n` +
+  `WHERE b.last_chg_bas_dt = ?1 OR s.valid_from = ?1\n` +
+  `ORDER BY b.isin_cd\n` +
+  `LIMIT ?2;`;

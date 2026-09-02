@@ -61,6 +61,7 @@ export async function mockSnapshot(page: Page, bonds: MockBond[]): Promise<void>
   const index: SnapshotIndex = {
     generatedAt: new Date(0).toISOString(),
     bond: { key: `snapshot/bond/${payload.basDt}.json`, basDt: payload.basDt, count: bonds.length },
+    bondDeltas: [],
     priceDeltas: [],
   };
 
