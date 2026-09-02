@@ -10,6 +10,7 @@ import { env } from "cloudflare:workers";
 import { writeBondPage } from "@/lib/d1/bond-repo";
 import { writeBondPricePage } from "@/lib/d1/price-repo";
 import { buildAndPutSnapshot } from "@/lib/snapshot/build";
+import { buildAndPutBondDelta } from "@/lib/snapshot/bond-delta";
 import { encodeSnapshot } from "@/lib/snapshot/encode";
 import { readSnapshotBondPage, readSnapshotCodeLabels, readSnapshotLatestPricePage } from "@/lib/d1/snapshot-repo";
 import { snapshotBondKey, SNAPSHOT_INDEX_KEY } from "@/lib/r2/keys";
@@ -37,45 +38,71 @@ describe("buildAndPutSnapshot", () => {
     }));
     await writeBondPricePage(env.DB, priceItems);
 
-    const result = await buildAndPutSnapshot(env);
+    const result = await buildAndPutSnapshot(env, BAS_DT);
     expect(result.bondCount).toBe(12);
     expect(result.priceCount).toBe(6);
 
     const bondObj = await env.ARCHIVE.get(snapshotBondKey(result.basDt));
     const workerPayload = await notNull(bondObj).json<SnapshotPayload>();
 
-    // 같은 D1 상태를 전량 조회해 encodeSnapshot()으로 직접 인코딩한 것과 비교한다.
+    // 같은 D1 상태를 전량 조회해 encodeSnapshot()으로 직접 인코딩한 것과 비교한다. 두 경로가
+    // 같은 basDt를 basDt override로 받아야 바이트가 일치한다(양쪽 모두 BAS_DT를 넘긴다).
     const bondRows = await readSnapshotBondPage(env.DB, "", 1000);
     const priceRows = await readSnapshotLatestPricePage(env.DB, "", 1000);
     const codeLabelRows = await readSnapshotCodeLabels(env.DB);
-    const expected = encodeSnapshot({
-      bondRows,
-      stateRows: bondRows.map((r) => ({ isin_cd: r.isin_cd, bond_bal: r.bond_bal, kis_grade: r.kis_grade })),
-      codeLabelRows,
-      latestPriceRows: priceRows,
-    });
+    const expected = encodeSnapshot(
+      {
+        bondRows,
+        stateRows: bondRows.map((r) => ({ isin_cd: r.isin_cd, bond_bal: r.bond_bal, kis_grade: r.kis_grade })),
+        codeLabelRows,
+        latestPriceRows: priceRows,
+      },
+      BAS_DT,
+    );
 
     expect(JSON.stringify(workerPayload)).toBe(JSON.stringify(expected));
   });
 
-  test("index.json의 base 포인터를 갱신하고, base basDt 이하의 기존 델타는 정리한다", async () => {
+  test("basDt override를 그날 bond 정적 필드가 하나도 안 바뀌어도 그대로 쓴다", async () => {
+    // 회귀 방지: buildAndPutSnapshot이 targetBasDt 대신 MAX(last_chg_bas_dt)를 쓰면, 그날
+    // bond 정적 필드가 하나도 안 바뀐 경우(흔함 — bond_state만 바뀐 날도 있다) 스냅샷
+    // basDt가 수집 대상 basDt보다 과거로 떨어져 R2 키·app_meta·sync_run이 어긋난다.
+    const staleBasDt = BAS_DT - 5;
+    await writeBondPage(env.DB, buildIssuItems(2, String(staleBasDt)), staleBasDt);
+
+    const result = await buildAndPutSnapshot(env, BAS_DT);
+
+    expect(result.basDt).toBe(BAS_DT);
+    expect(await env.ARCHIVE.get(snapshotBondKey(BAS_DT))).not.toBeNull();
+    expect(await env.ARCHIVE.get(snapshotBondKey(staleBasDt))).toBeNull();
+  });
+
+  test("index.json의 base 포인터를 갱신하고, base basDt 이하의 기존 price/bond 델타는 정리한다", async () => {
+    // 전날치 bond 델타(정리 대상) — writeBondPage로 어제 변경분을 만든 뒤 델타로 올린다.
+    const yesterday = BAS_DT - 1;
+    await writeBondPage(env.DB, buildIssuItems(1, String(yesterday)), yesterday);
+    await buildAndPutBondDelta(env, yesterday);
+
     await writeBondPage(env.DB, buildIssuItems(3, String(BAS_DT)), BAS_DT);
 
     // base(오늘)보다 이전 델타 하나(정리 대상), 이후 델타 하나(유지 대상)를 미리 심어 둔다.
     await writePriceDelta(env.ARCHIVE, BAS_DT - 1, buildPriceItems(1, String(BAS_DT - 1)));
     await writePriceDelta(env.ARCHIVE, BAS_DT + 1, buildPriceItems(1, String(BAS_DT + 1)));
 
-    const result = await buildAndPutSnapshot(env);
+    const result = await buildAndPutSnapshot(env, BAS_DT);
 
     const indexObj = await env.ARCHIVE.get(SNAPSHOT_INDEX_KEY);
     const index = await notNull(indexObj).json<SnapshotIndex>();
 
-    expect(index.bond).toMatchObject({ key: snapshotBondKey(result.basDt), basDt: result.basDt, count: 3 });
+    // bondCount는 bond 테이블 전체(어제 1행 + 오늘 3행)다 — base는 매번 전량 재빌드다.
+    expect(index.bond).toMatchObject({ key: snapshotBondKey(result.basDt), basDt: result.basDt, count: 4 });
     expect(index.priceDeltas.map((d) => d.basDt)).toEqual([BAS_DT + 1]);
+    // 어제(base basDt 이하) bond 델타는 이제 base에 흡수됐으니 정리돼야 한다.
+    expect(index.bondDeltas).toEqual([]);
   });
 
   test("bond 테이블이 비어 있으면 basDt=0 스냅샷을 만들지 않고 에러를 던진다", async () => {
-    await expect(buildAndPutSnapshot(env)).rejects.toThrow(/bond/);
+    await expect(buildAndPutSnapshot(env, BAS_DT)).rejects.toThrow(/bond/);
     expect(await env.ARCHIVE.get(snapshotBondKey(0))).toBeNull();
   });
 });

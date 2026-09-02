@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { rawArchiveKey, snapshotBondKey, snapshotPriceDeltaKey, SNAPSHOT_INDEX_KEY } from "@/lib/r2/keys";
+import {
+  rawArchiveKey,
+  snapshotBondDeltaKey,
+  snapshotBondKey,
+  snapshotPriceDeltaKey,
+  SNAPSHOT_INDEX_KEY,
+} from "@/lib/r2/keys";
 
 describe("R2 키 네이밍", () => {
   test("원본 아카이브 키는 YYYY/MM/DD 계층 + 4자리 zero-pad 페이지 번호", () => {
@@ -13,6 +19,10 @@ describe("R2 키 네이밍", () => {
 
   test("일일 델타 키", () => {
     expect(snapshotPriceDeltaKey(20260820)).toBe("snapshot/price/20260820.json");
+  });
+
+  test("일일 bond 델타 키", () => {
+    expect(snapshotBondDeltaKey(20260820)).toBe("snapshot/bond-delta/20260820.json");
   });
 
   test("인덱스 키는 고정", () => {

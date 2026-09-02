@@ -35,6 +35,15 @@ export function snapshotBondKey(basDt: number): string {
   return `snapshot/bond/${basDt}.json`;
 }
 
+/**
+ * 일일 bond 델타(매 영업일, Worker cron이 올림). base 재빌드 요일(수) 외에는 그날 변경된
+ * 종목만 여기 담아, base(3MB대, `immutable` 캐시)를 매일 무효화하지 않고도 기본정보를
+ * 일간으로 갱신한다 — `src/lib/snapshot/bond-delta.ts` 참고.
+ */
+export function snapshotBondDeltaKey(basDt: number): string {
+  return `snapshot/bond-delta/${basDt}.json`;
+}
+
 /** 일일 시세 델타(매일, Worker cron이 올림). */
 export function snapshotPriceDeltaKey(basDt: number): string {
   return `snapshot/price/${basDt}.json`;

@@ -12,19 +12,21 @@
 export interface SnapshotIndex {
   generatedAt: string;
   bond: { key: string; basDt: number; count: number } | null;
+  /** 일일 bond 델타(변경 종목만). base basDt 이후만 남는다 — `bondDelta` 액션이 매 영업일 추가. */
+  bondDeltas: { key: string; basDt: number; count: number }[];
   priceDeltas: { key: string; basDt: number; count: number }[];
 }
 
 /** index.json 오브젝트가 아직 없을 때(최초 실행)의 초기값. */
 export function emptySnapshotIndex(): SnapshotIndex {
-  return { generatedAt: new Date(0).toISOString(), bond: null, priceDeltas: [] };
+  return { generatedAt: new Date(0).toISOString(), bond: null, bondDeltas: [], priceDeltas: [] };
 }
 
 /**
  * 새 base(bond) 스냅샷을 index에 반영한다. base가 이미 그 시점을 반영하므로, base
- * basDt 이하의 기존 델타는 더 이상 병합할 필요가 없어 정리한다 — `writePriceDelta`가
- * 델타를 추가할 때 적용하는 것과 동일한 규칙을 base 쪽에서 적용하는 것이다
- * (`src/lib/r2/price-delta.ts` 참고).
+ * basDt 이하의 기존 델타(bond·price 둘 다)는 더 이상 병합할 필요가 없어 정리한다 —
+ * `writePriceDelta`/`writeBondDelta`가 델타를 추가할 때 적용하는 것과 동일한 규칙을
+ * base 쪽에서 적용하는 것이다(`src/lib/r2/price-delta.ts`/`src/lib/snapshot/bond-delta.ts` 참고).
  */
 export function applyBondSnapshotToIndex(
   index: SnapshotIndex,
@@ -33,6 +35,7 @@ export function applyBondSnapshotToIndex(
   return {
     generatedAt: new Date().toISOString(),
     bond,
+    bondDeltas: index.bondDeltas.filter((d) => d.basDt > bond.basDt),
     priceDeltas: index.priceDeltas.filter((d) => d.basDt > bond.basDt),
   };
 }

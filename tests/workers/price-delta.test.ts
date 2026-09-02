@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import { env } from "cloudflare:workers";
-import { DELTA_COLUMNS, writePriceDelta, type SnapshotIndex } from "@/lib/r2/price-delta";
+import { DELTA_COLUMNS, readIndex as readIndexViaSrc, writePriceDelta, type SnapshotIndex } from "@/lib/r2/price-delta";
 import { snapshotBondKey, snapshotPriceDeltaKey, SNAPSHOT_INDEX_KEY } from "@/lib/r2/keys";
 import { resetD1 } from "./helpers/reset-d1";
 import { buildPriceItems } from "./helpers/envelope";
@@ -78,7 +78,12 @@ describe("writePriceDelta", () => {
   });
 
   test("base보다 오래되거나 같은 날짜의 델타는 새로 추가될 때도 index에 들어가지 않는다 (버그 C 회귀)", async () => {
-    const index0 = (await readIndex()) ?? { generatedAt: new Date(0).toISOString(), bond: null, priceDeltas: [] };
+    const index0 = (await readIndex()) ?? {
+      generatedAt: new Date(0).toISOString(),
+      bond: null,
+      bondDeltas: [],
+      priceDeltas: [],
+    };
     await env.ARCHIVE.put(
       SNAPSHOT_INDEX_KEY,
       JSON.stringify({ ...index0, bond: { key: snapshotBondKey(20260820), basDt: 20260820, count: 29087 } }),
@@ -110,5 +115,36 @@ describe("writePriceDelta", () => {
     const afterObj = await env.ARCHIVE.get(SNAPSHOT_INDEX_KEY);
     const afterText = await notNull(afterObj).text();
     expect(afterText).toBe("{ 이건 유효한 JSON이 아님");
+  });
+
+  test("bondDeltas 필드를 보존한다 — price 델타를 쓸 때 기존 bondDeltas를 날리지 않는다", async () => {
+    // bondDeltas 필드가 이미 채워진 index를 시뮬레이션(bondDelta 도입 이후 상태).
+    const bondDeltaEntry = { key: "snapshot/bond-delta/20260820.json", basDt: 20260820, count: 5 };
+    await env.ARCHIVE.put(
+      SNAPSHOT_INDEX_KEY,
+      JSON.stringify({
+        generatedAt: new Date(0).toISOString(),
+        bond: null,
+        bondDeltas: [bondDeltaEntry],
+        priceDeltas: [],
+      }),
+    );
+
+    await writePriceDelta(env.ARCHIVE, 20260821, buildPriceItems(1, "20260821"));
+
+    const after = await readIndex();
+    expect(after?.bondDeltas).toEqual([bondDeltaEntry]);
+    expect(after?.priceDeltas.map((d) => d.basDt)).toEqual([20260821]);
+  });
+
+  test("readIndex()는 bondDeltas 필드가 없는 구형 index.json도 빈 배열로 보정한다", async () => {
+    // bondDelta 도입 이전(구형) index.json — bondDeltas 필드 자체가 없다.
+    await env.ARCHIVE.put(
+      SNAPSHOT_INDEX_KEY,
+      JSON.stringify({ generatedAt: new Date(0).toISOString(), bond: null, priceDeltas: [] }),
+    );
+
+    const index = await readIndexViaSrc(env.ARCHIVE);
+    expect(index.bondDeltas).toEqual([]);
   });
 });

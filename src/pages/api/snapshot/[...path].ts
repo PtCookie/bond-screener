@@ -18,7 +18,7 @@
  */
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
-import { SNAPSHOT_INDEX_KEY, snapshotBondKey, snapshotPriceDeltaKey } from "@/lib/r2/keys";
+import { SNAPSHOT_INDEX_KEY, snapshotBondDeltaKey, snapshotBondKey, snapshotPriceDeltaKey } from "@/lib/r2/keys";
 
 export const prerender = false;
 
@@ -31,6 +31,7 @@ const INDEX_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300";
 const IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
 const BOND_PATH_RE = /^bond\/(\d{8})$/;
+const BOND_DELTA_PATH_RE = /^bond-delta\/(\d{8})$/;
 const PRICE_PATH_RE = /^price\/(\d{8})$/;
 
 function resolveTarget(path: string): SnapshotTarget | null {
@@ -41,6 +42,11 @@ function resolveTarget(path: string): SnapshotTarget | null {
   const bondMatch = BOND_PATH_RE.exec(path);
   if (bondMatch) {
     return { key: snapshotBondKey(Number(bondMatch[1])), cacheControl: IMMUTABLE_CACHE_CONTROL };
+  }
+
+  const bondDeltaMatch = BOND_DELTA_PATH_RE.exec(path);
+  if (bondDeltaMatch) {
+    return { key: snapshotBondDeltaKey(Number(bondDeltaMatch[1])), cacheControl: IMMUTABLE_CACHE_CONTROL };
   }
 
   const priceMatch = PRICE_PATH_RE.exec(path);

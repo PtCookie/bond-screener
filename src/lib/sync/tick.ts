@@ -10,7 +10,8 @@
 import { getRunningSyncRun, getSyncRun, startSyncRun, type SyncRun, type SyncSource } from "@/lib/d1/sync-run-repo";
 import { getAppMeta, setAppMeta } from "@/lib/d1/meta-repo";
 import { buildAndPutSnapshot } from "@/lib/snapshot/build";
-import { planTick } from "./plan";
+import { buildAndPutBondDelta } from "@/lib/snapshot/bond-delta";
+import { planTick, type AttemptCounter } from "./plan";
 import { previousBusinessDayKst } from "./dates";
 import { runIssuSyncStep } from "./issu-sync";
 import { runPriceSyncStep } from "./price-sync";
@@ -22,19 +23,16 @@ export interface SyncEnv {
   BOND_API_SERVICE_KEY: string;
 }
 
-/** `app_meta`에 스냅샷 진행 상태를 기록하는 키. `src/lib/d1/meta-repo.ts`가 CRUD를 제공. */
+/** `app_meta`에 스냅샷/델타 진행 상태를 기록하는 키. `src/lib/d1/meta-repo.ts`가 CRUD를 제공. */
 const SNAPSHOT_BAS_DT_META_KEY = "snapshot_bas_dt";
 const SNAPSHOT_ATTEMPTS_META_KEY = "snapshot_attempts";
+const BOND_DELTA_BAS_DT_META_KEY = "bond_delta_bas_dt";
+const BOND_DELTA_ATTEMPTS_META_KEY = "bond_delta_attempts";
 
-interface SnapshotAttempts {
-  basDt: number;
-  n: number;
-}
-
-function parseSnapshotAttempts(raw: string | null): SnapshotAttempts | null {
+function parseAttempts(raw: string | null): AttemptCounter | null {
   if (raw === null) return null;
   try {
-    return JSON.parse(raw) as SnapshotAttempts;
+    return JSON.parse(raw) as AttemptCounter;
   } catch {
     return null;
   }
@@ -46,13 +44,26 @@ export async function runSyncTick(env: SyncEnv, scheduledTime: number): Promise<
 
   const runningRun = await getRunningSyncRun(env.DB);
   const priceRunToday = runningRun?.source === "price" ? runningRun : await getSyncRun(env.DB, "price", targetBasDt);
-  const issuRunThisWeek = runningRun?.source === "issu" ? runningRun : await getSyncRun(env.DB, "issu", targetBasDt);
+  const issuRunToday = runningRun?.source === "issu" ? runningRun : await getSyncRun(env.DB, "issu", targetBasDt);
 
   const snapshotBasDtRaw = await getAppMeta(env.DB, SNAPSHOT_BAS_DT_META_KEY);
   const snapshotBasDt = snapshotBasDtRaw === null ? null : Number(snapshotBasDtRaw);
-  const snapshotAttempts = parseSnapshotAttempts(await getAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY));
+  const snapshotAttempts = parseAttempts(await getAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY));
 
-  const action = planTick({ now, runningRun, priceRunToday, issuRunThisWeek, snapshotBasDt, snapshotAttempts });
+  const bondDeltaBasDtRaw = await getAppMeta(env.DB, BOND_DELTA_BAS_DT_META_KEY);
+  const bondDeltaBasDt = bondDeltaBasDtRaw === null ? null : Number(bondDeltaBasDtRaw);
+  const bondDeltaAttempts = parseAttempts(await getAppMeta(env.DB, BOND_DELTA_ATTEMPTS_META_KEY));
+
+  const action = planTick({
+    now,
+    runningRun,
+    priceRunToday,
+    issuRunToday,
+    snapshotBasDt,
+    snapshotAttempts,
+    bondDeltaBasDt,
+    bondDeltaAttempts,
+  });
 
   if (action.kind === "idle") {
     console.log("[sync] 오늘 할 일 없음");
@@ -61,6 +72,11 @@ export async function runSyncTick(env: SyncEnv, scheduledTime: number): Promise<
 
   if (action.kind === "snapshot") {
     await runSnapshotAction(env, action.basDt, Date.now());
+    return;
+  }
+
+  if (action.kind === "bondDelta") {
+    await runBondDeltaAction(env, action.basDt, Date.now());
     return;
   }
 
@@ -133,21 +149,59 @@ async function runPagesUntilBudget(env: SyncEnv, source: SyncSource, initialRun:
   );
 }
 
+/**
+ * base 스냅샷 전량 재빌드. `basDt`는 `planTick`이 건넨 "수집 대상" basDt(issu run의
+ * basDt)다 — `buildAndPutSnapshot`이 이 값을 R2 키·index의 basDt로 그대로 쓰고
+ * (`src/lib/snapshot/build.ts` 참고), 여기서도 그 값을 그대로 `app_meta`에 기록한다.
+ * 빌드 결과(`result.basDt`)를 대신 쓰면 안 된다 — 지금은 `buildAndPutSnapshot`이 인자로
+ * 받은 `basDt`를 그대로 반환하므로 값 자체는 같지만, "무엇을 기록하는가"의 정본은 항상
+ * planTick이 판단에 쓰는 액션의 basDt여야 한다(그래야 이 basDt와 `sync_run`의 basDt가
+ * 구조적으로 어긋날 수 없다).
+ */
 async function runSnapshotAction(env: SyncEnv, basDt: number, now: number): Promise<void> {
   try {
-    const result = await buildAndPutSnapshot(env);
-    await setAppMeta(env.DB, SNAPSHOT_BAS_DT_META_KEY, String(result.basDt), now);
+    const result = await buildAndPutSnapshot(env, basDt);
+    await setAppMeta(env.DB, SNAPSHOT_BAS_DT_META_KEY, String(basDt), now);
     // 성공했으니 실패 카운터를 이 basDt 기준으로 초기화해 둔다(다음 실패 집계가 섞이지 않게).
-    await setAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY, JSON.stringify({ basDt: result.basDt, n: 0 }), now);
+    await setAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY, JSON.stringify({ basDt, n: 0 }), now);
     console.log(
       `[sync] snapshot basDt=${result.basDt} bond=${result.bondCount} price=${result.priceCount} bytes=${result.bytes}`,
     );
   } catch (err) {
-    const prev = parseSnapshotAttempts(await getAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY));
+    const prev = parseAttempts(await getAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY));
     const n = prev && prev.basDt === basDt ? prev.n + 1 : 1;
     await setAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY, JSON.stringify({ basDt, n }), now);
     console.error(
       `[sync] snapshot 실패(시도 ${n}) basDt=${basDt}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
+
+/**
+ * 그날 변경된 종목만 담은 bond 델타를 올린다(`src/lib/snapshot/bond-delta.ts`). 변경분이
+ * `BOND_DELTA_MAX_ROWS`를 넘으면(`tooLarge`) 델타 대신 전량 재빌드로 폴백한다 — 그 지점부터는
+ * 델타가 base에 근접해 base+delta 구조의 이점이 사라지므로 차라리 base를 다시 굳히는
+ * 편이 낫다. 폴백 성공/실패 회계는 `runSnapshotAction`과 동일하게 `snapshot_bas_dt`/
+ * `snapshot_attempts`에 기록한다 — bond 델타 액션이되 실제로는 스냅샷 액션을 수행한
+ * 것이므로 스냅샷 쪽 상태를 갱신하는 게 맞다(다음 tick의 `planTick`이 그 기준으로 판단한다).
+ */
+async function runBondDeltaAction(env: SyncEnv, basDt: number, now: number): Promise<void> {
+  try {
+    const result = await buildAndPutBondDelta(env, basDt);
+    if (result.tooLarge) {
+      console.warn(`[sync] bond delta 임계 초과 — 전량 재빌드로 폴백 basDt=${basDt}`);
+      await runSnapshotAction(env, basDt, now);
+      return;
+    }
+    await setAppMeta(env.DB, BOND_DELTA_BAS_DT_META_KEY, String(basDt), now);
+    await setAppMeta(env.DB, BOND_DELTA_ATTEMPTS_META_KEY, JSON.stringify({ basDt, n: 0 }), now);
+    console.log(`[sync] bondDelta basDt=${basDt} count=${result.count} bytes=${result.bytes}`);
+  } catch (err) {
+    const prev = parseAttempts(await getAppMeta(env.DB, BOND_DELTA_ATTEMPTS_META_KEY));
+    const n = prev && prev.basDt === basDt ? prev.n + 1 : 1;
+    await setAppMeta(env.DB, BOND_DELTA_ATTEMPTS_META_KEY, JSON.stringify({ basDt, n }), now);
+    console.error(
+      `[sync] bondDelta 실패(시도 ${n}) basDt=${basDt}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
