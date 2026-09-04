@@ -19,8 +19,12 @@ interface ScreenerTableProps {
   onResetFilters?: () => void;
 }
 
-/** 1열(종목명)을 좌측 sticky로 고정 — 13컬럼 가로 스크롤에서 종목명이 사라지면 표를 읽을 수 없다. */
-const STICKY_FIRST_COL = "sticky left-0 z-10 bg-background";
+/**
+ * 1열(종목명)을 좌측 sticky로 고정 — 13컬럼 가로 스크롤에서 종목명이 사라지면 표를 읽을 수 없다.
+ * 행 hover 틴트(TableRow의 hover:bg-muted/50)는 반투명이라 sticky 셀에 그대로 쓰면 뒤로
+ * 스크롤되는 다른 셀이 비친다 — bg-row-hover(불투명, muted를 background와 미리 합성한 값)로 대신 칠한다.
+ */
+const STICKY_FIRST_COL = "group-hover/row:bg-row-hover sticky left-0 z-10 bg-background transition-colors";
 
 /** 모바일에서 sticky 종목명이 뚫고 나갈 수 있는 최대 폭 — 페이지 좌우 padding(px-4 × 2 = 2rem) + 여유. */
 const MOBILE_NAME_MAX_WIDTH = "max-w-[calc(100vw-3rem)]";
@@ -53,7 +57,7 @@ function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: Screen
       </colgroup>
       <TableHeader>
         {headerGroups.map((headerGroup) => (
-          <TableRow key={headerGroup.id}>
+          <TableRow key={headerGroup.id} className="group/row">
             {headerGroup.headers.map((header, idx) => (
               <TableHead
                 key={header.id}
@@ -71,16 +75,12 @@ function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: Screen
       </TableHeader>
       <TableBody>
         {rows.map((row) => (
-          <TableRow
-            key={row.id}
-            className="group/row cursor-pointer hover:bg-transparent"
-            onClick={(e) => handleRowClick(e, row)}
-          >
+          <TableRow key={row.id} className="group/row cursor-pointer" onClick={(e) => handleRowClick(e, row)}>
             {row.getAllCells().map((cell, idx) => (
               <TableCell
                 key={cell.id}
                 className={cn(
-                  "group-hover/row:bg-muted/50 truncate",
+                  "truncate",
                   idx === 0 && STICKY_FIRST_COL,
                   cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
                   cell.column.columnDef.meta?.groupStart && "border-l",

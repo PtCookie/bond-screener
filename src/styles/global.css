@@ -43,6 +43,9 @@
        시멘틱(브랜드/파괴적 동작)이라 재활용하지 않는다. */
     --price-up: oklch(0.577 0.245 27.325);
     --price-down: oklch(0.508 0.152 250);
+    /* sticky 열(스크리너 1열)은 반투명 배경을 쓸 수 없다 — 뒤로 스크롤되는 셀이 비친다.
+       행 hover 틴트(bg-muted/50)를 페이지 배경과 미리 합성한 불투명 등가색. */
+    --row-hover: color-mix(in oklab, var(--muted) 50%, var(--background));
 }
 
 .dark {
@@ -117,6 +120,7 @@
     --color-background: var(--background);
     --color-price-up: var(--price-up);
     --color-price-down: var(--price-down);
+    --color-row-hover: var(--row-hover);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
