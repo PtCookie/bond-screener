@@ -34,18 +34,19 @@ describe("classify — docs/api/README.md 현행 에러코드 표를 그대로 �
     expect(classify(new OpenApiGatewayError(500, "UNKNOWN", ""))).toBe("fatal");
   });
 
-  test("OpenApiUnexpectedResponseError는 retry (일시적 파싱 실패일 가능성)", () => {
-    expect(classify(new OpenApiUnexpectedResponseError("의 없음"))).toBe("retry");
+  test("OpenApiUnexpectedResponseError는 backoff (구조화된 원인 코드가 없어 1회 재시도의 근거가 없음)", () => {
+    expect(classify(new OpenApiUnexpectedResponseError("의 없음"))).toBe("backoff");
   });
 
-  test("네트워크 에러(TypeError 등)는 retry", () => {
-    expect(classify(new TypeError("fetch failed"))).toBe("retry");
+  test("네트워크 에러(TypeError, TimeoutError 등)는 backoff — retry였다가 재실패 시 failed로 영구 고착되던 문제(2026-09-07)", () => {
+    expect(classify(new TypeError("fetch failed"))).toBe("backoff");
+    expect(classify(new DOMException("The operation was aborted due to timeout", "TimeoutError"))).toBe("backoff");
   });
 
-  test("문자열 throw, undefined 등 임의 값도 retry (방어적 기본값)", () => {
-    expect(classify("문자열 에러")).toBe("retry");
-    expect(classify(undefined)).toBe("retry");
-    expect(classify(null)).toBe("retry");
+  test("문자열 throw, undefined 등 임의 값도 backoff (방어적 기본값)", () => {
+    expect(classify("문자열 에러")).toBe("backoff");
+    expect(classify(undefined)).toBe("backoff");
+    expect(classify(null)).toBe("backoff");
   });
 });
 

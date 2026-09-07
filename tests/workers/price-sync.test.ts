@@ -6,7 +6,7 @@ import { PRICE_PAGE_SIZE } from "@/lib/sync/config";
 import { rawArchiveKey, snapshotPriceDeltaKey, SNAPSHOT_INDEX_KEY } from "@/lib/r2/keys";
 import { resetD1 } from "./helpers/reset-d1";
 import { buildEnvelope, buildErrorEnvelope, buildPriceItems } from "./helpers/envelope";
-import { stubFetchOnce } from "./helpers/fetch-stub";
+import { stubFetchOnce, stubFetchThrows } from "./helpers/fetch-stub";
 import { notNull } from "./helpers/assert";
 
 const BAS_DT = 20260821;
@@ -118,6 +118,17 @@ describe("runPriceSyncStep — 오픈API 에러 정책", () => {
     expect(result.done).toBe(true);
     const updatedRun = await getSyncRun(env.DB, "price", BAS_DT);
     expect(updatedRun?.status).toBe("failed");
+  });
+
+  test("순수 TimeoutError(OpenApiError/OpenApiGatewayError 아님): backoff, D1 무변경, 커서 불변 (2026-09-07 회귀)", async () => {
+    stubFetchThrows(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+
+    const run = await startAndGetRun();
+    const result = await runPriceSyncStep(env, run);
+
+    expect(result).toEqual({ done: false, queriesUsed: 0 });
+    const updatedRun = await getSyncRun(env.DB, "price", BAS_DT);
+    expect(updatedRun).toMatchObject({ status: "running", next_page: 1 });
   });
 });
 
