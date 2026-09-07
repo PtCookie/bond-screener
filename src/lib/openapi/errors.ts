@@ -85,6 +85,13 @@ export function classify(error: unknown): RetryPolicy {
     }
   }
 
-  // 네트워크 오류, JSON 파싱 실패 등 — 일시적일 가능성이 높다고 보고 재시도.
-  return "retry";
+  // 네트워크 오류(TimeoutError 등), OpenApiUnexpectedResponseError(JSON 파싱 실패 등
+  // 응답 자체가 예상 밖 형식인 경우) — OpenApiError/OpenApiGatewayError처럼 구조화된
+  // 원인 코드가 없어 같은 tick 안에서의 1회 재시도가 의미 있을지 판단할 근거가 없다.
+  // "retry"였다가 그 재시도마저 실패하면 failSyncRun()으로 status='failed'가 영구
+  // 기록되는데, `shouldStart()`(src/lib/sync/plan.ts)는 'failed'를 재시도 대상으로
+  // 보지 않아 다음 basDt로 넘어가기 전까지(주말이 끼면 며칠) 복구 기회가 없다 — 실제로
+  // 순수 TimeoutError 한 번으로 이 상태에 빠진 적이 있다. "backoff"는 커서를 유지한 채
+  // 이번 tick만 포기해 다음 tick(1분 뒤)에 자동으로 재개하므로 자가 복구된다.
+  return "backoff";
 }
