@@ -13,6 +13,13 @@ const rootDir = fileURLToPath(new URL(".", import.meta.url));
 // Astro 빌드 컨텍스트 밖에서는 해석되지 않는다. 우리는 sync/*.ts의 plain 함수를
 // 테스트 안에서 직접 호출하므로 Worker 진입점(main) 자체가 필요 없다.
 export default defineConfig({
+  // astro.config.mjs와 같은 이유로 .claude/(루트 안의 git worktree)를 감시에서 뺀다 —
+  // 이 설정은 getViteConfig()를 경유하지 않으므로 여기에 따로 적어야 한다.
+  server: {
+    watch: {
+      ignored: ["**/.claude/**"],
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(rootDir, "./src"),
