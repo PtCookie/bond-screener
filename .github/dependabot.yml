@@ -1,88 +1,26 @@
 # https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
 version: 2
-
 updates:
-  - package-ecosystem: "npm" # pnpm 워크스페이스도 npm 생태계로 처리된다
-    directory: "/"
+  - package-ecosystem: npm
+    directory: /
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Seoul"
-    open-pull-requests-limit: 5
+      interval: weekly
     commit-message:
-      prefix: "chore"
-      prefix-development: "chore"
-      include: "scope"
-    # 릴리스 직후 회귀를 피하려고 며칠 묵힌 버전만 올린다
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
     cooldown:
       default-days: 3
       semver-major-days: 14
       semver-minor-days: 5
       semver-patch-days: 3
     ignore:
-      # Node 런타임 고정(.node-version 24.18.0, engines ^22.12 || ^24.11)에 맞춰
-      # 타입 정의의 메이저 승격은 수동으로 판단한다
       - dependency-name: "@types/node"
-        update-types: ["version-update:semver-major"]
-    groups:
-      # 앞선 그룹이 먼저 매칭되므로 좁은 범위부터 나열한다
-      cloudflare:
-        patterns:
-          - "wrangler"
-          - "@cloudflare/*"
-          - "@astrojs/cloudflare"
-      astro:
-        patterns:
-          - "astro"
-          - "@astrojs/*"
-      react:
-        patterns:
-          - "react"
-          - "react-dom"
-          - "@types/react"
-          - "@types/react-dom"
-      tanstack:
-        patterns:
-          - "@tanstack/*"
-      ui:
-        patterns:
-          - "@base-ui/react"
-          - "@phosphor-icons/react"
-          - "@fontsource-variable/*"
-          - "tailwindcss"
-          - "@tailwindcss/*"
-          - "tailwind-merge"
-          - "tw-animate-css"
-          - "class-variance-authority"
-          - "clsx"
-          - "shadcn"
-      testing:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-          - "vitest-browser-react"
-          - "playwright"
-          - "@playwright/*"
-      lint-format:
-        patterns:
-          - "eslint"
-          - "eslint-*"
-          - "@eslint/*"
-          - "@eslint-react/*"
-          - "typescript-eslint"
-          - "prettier"
-          - "prettier-plugin-*"
-          - "globals"
-      # 위 그룹에 걸리지 않은 나머지는 minor/patch만 한데 묶고,
-      # 메이저는 그룹 밖에서 개별 PR로 받는다
-      production-minor-patch:
-        dependency-type: "production"
         update-types:
-          - "minor"
-          - "patch"
-      development-minor-patch:
-        dependency-type: "development"
+          - "version-update:semver-major"
+    groups:
+      npm:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
