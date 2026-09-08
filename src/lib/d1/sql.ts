@@ -215,3 +215,143 @@ export const SNAPSHOT_BOND_CHANGED_SQL =
   `WHERE b.last_chg_bas_dt = ?1 OR s.valid_from = ?1\n` +
   `ORDER BY b.isin_cd\n` +
   `LIMIT ?2;`;
+
+// ---------------------------------------------------------------------------
+// 종목 검색(MCP `search_bonds` 툴 전용, `src/lib/d1/search-repo.ts`가 호출) — 위
+// 상수들과 달리 필터 조합이 가변이라 정적 문자열이 아니라 빌더 함수다. 값은 여기서도
+// 계속 bind 파라미터로만 넘긴다(SQL 문자열에 직접 삽입하지 않음). **여기서만** 익명
+// 플레이스홀더(`?`)를 쓴다 — 위 정적 SQL들은 자리 수가 고정이라 `?1`/`?2`로 손수
+// 번호를 매기지만, 필터 조합에 따라 자리 수가 바뀌는 동적 쿼리에서는 등장 순서로
+// 자동 채번되는 익명 플레이스홀더가 맞다(SQLite/D1 표준 동작).
+// ---------------------------------------------------------------------------
+
+export interface BondSearchFilters {
+  /** 발행인명 부분일치(LIKE). */
+  issuer?: string;
+  /** 종목명 부분일치(LIKE). */
+  name?: string;
+  /** 만기일(YYYYMMDD) 하한(포함) — `idx_bond_expr_dt`를 태운다. */
+  exprFrom?: number;
+  /** 만기일(YYYYMMDD) 상한(포함). */
+  exprTo?: number;
+  /** 표면이율(%) 하한(포함). */
+  couponMin?: number;
+  /** 표면이율(%) 상한(포함). */
+  couponMax?: number;
+  /**
+   * KIS 신용등급 화이트리스트(OR 조건). 개수만큼 `IN (?, ?, ...)` 플레이스홀더를
+   * 만들어 그대로 바인딩하므로, 다른 필터와 조합될 경우 D1 쿼리당 bound parameter
+   * 100개 제한에 걸릴 수 있다 — 이 함수는 개수를 스스로 방어하지 않고 호출부의
+   * 입력 검증(현재 유일한 호출부인 `src/lib/mcp/tools.ts`의 zod `max(20)`)에 의존한다.
+   */
+  grade?: readonly string[];
+  /** 발행잔액 하한(포함). */
+  balMin?: number;
+  /** 정렬 기준 — 생략 시 `exprDt`(만기 임박순). */
+  sort?: "exprDt" | "bondBal" | "coupon";
+  limit: number;
+}
+
+/**
+ * 정렬 기준별 ORDER BY 절. SQLite 네이티브 `NULLS LAST`를 쓴다(`IS NULL, col` 관용구
+ * 대신) — 실측(`EXPLAIN QUERY PLAN`, 로컬 D1)으로 확인한 차이: `exprDt`(기본 정렬,
+ * `idx_bond_expr_dt` 대상)에서 `IS NULL, ASC` 관용구는 인덱스로 후보를 좁혀도
+ * "USE TEMP B-TREE FOR ORDER BY"가 별도로 붙어 매번 정렬 단계를 탔지만, `ASC NULLS
+ * LAST`는 필터 없는 기본 호출까지 포함해 인덱스 순서를 그대로 타 정렬 단계가
+ * 사라진다("SCAN b USING INDEX idx_bond_expr_dt" 하나로 끝). `bondBal`/`coupon`은
+ * 대상 컬럼에 인덱스가 없어(AGENTS.md — MCP 검색을 위해 새 인덱스를 추가하지
+ * 않기로 함) 어느 표현이든 temp B-tree 정렬이 필요하지만, 표현을 통일해 둔다.
+ */
+const BOND_SEARCH_ORDER_CLAUSES: Record<NonNullable<BondSearchFilters["sort"]>, string> = {
+  exprDt: "b.bond_expr_dt ASC NULLS LAST",
+  bondBal: "s.bond_bal DESC NULLS LAST",
+  coupon: "b.bond_srfc_inrt DESC NULLS LAST",
+};
+
+/** `searchBonds`(`src/lib/d1/search-repo.ts`)의 결과 컬럼 — `BondSearchRow`와 순서가 대응한다. */
+export const BOND_SEARCH_SELECT_COLUMNS = [
+  "b.isin_cd",
+  "b.srtn_cd",
+  "b.isin_cd_nm",
+  "b.bond_isur_nm",
+  "b.bond_expr_dt",
+  "b.bond_srfc_inrt",
+  "b.bond_int_tcd",
+  "s.bond_bal",
+  "s.kis_grade",
+] as const;
+
+/** `BondSearchFilters`로부터 동적 검색 쿼리를 조립한다. `binds`는 `sql`의 플레이스홀더 순서와 정확히 대응한다. */
+export function buildBondSearchQuery(filters: BondSearchFilters): { sql: string; binds: (string | number)[] } {
+  const where: string[] = [];
+  const binds: (string | number)[] = [];
+
+  if (filters.issuer) {
+    where.push("b.bond_isur_nm LIKE ?");
+    binds.push(`%${filters.issuer}%`);
+  }
+  if (filters.name) {
+    where.push("b.isin_cd_nm LIKE ?");
+    binds.push(`%${filters.name}%`);
+  }
+  if (filters.exprFrom !== undefined) {
+    where.push("b.bond_expr_dt >= ?");
+    binds.push(filters.exprFrom);
+  }
+  if (filters.exprTo !== undefined) {
+    where.push("b.bond_expr_dt <= ?");
+    binds.push(filters.exprTo);
+  }
+  if (filters.couponMin !== undefined) {
+    where.push("b.bond_srfc_inrt >= ?");
+    binds.push(filters.couponMin);
+  }
+  if (filters.couponMax !== undefined) {
+    where.push("b.bond_srfc_inrt <= ?");
+    binds.push(filters.couponMax);
+  }
+  if (filters.grade && filters.grade.length > 0) {
+    where.push(`s.kis_grade IN (${filters.grade.map(() => "?").join(", ")})`);
+    binds.push(...filters.grade);
+  }
+  if (filters.balMin !== undefined) {
+    where.push("s.bond_bal >= ?");
+    binds.push(filters.balMin);
+  }
+
+  const whereClause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+  const orderClause = BOND_SEARCH_ORDER_CLAUSES[filters.sort ?? "exprDt"];
+  binds.push(filters.limit);
+
+  const sql =
+    `SELECT ${BOND_SEARCH_SELECT_COLUMNS.join(", ")}\n` +
+    `FROM bond b\n` +
+    `LEFT JOIN bond_state s ON s.isin_cd = b.isin_cd AND s.valid_to IS NULL\n` +
+    (whereClause ? `${whereClause}\n` : "") +
+    `ORDER BY ${orderClause}\n` +
+    `LIMIT ?;`;
+
+  return { sql, binds };
+}
+
+/**
+ * 검색 결과 종목들의 "최신" 시세를 붙인다. `?1`에 isin_cd 배열(JSON) —
+ * `BOND_FINGERPRINT_SELECT_SQL`과 같은 `json_each(?1)` 다건 조회 패턴이지만,
+ * `SNAPSHOT_LATEST_PRICE_PAGE_SQL`(키셋 범위)과 달리 검색 결과로 이미 좁혀진
+ * 명시적 isin_cd 목록을 받는다 — 검색 결과가 `LIMIT`으로 작아 페이지네이션이 불필요.
+ *
+ * 같은 `isin_cd`가 같은 최신 `bas_dt`에 KTS·일반채권 두 시장 행을 동시에 낼 수 있어
+ * (`bond_price` PK 주석, `migrations/0001_init.sql`) 이 쿼리는 종목당 2행을 낼 수 있다 —
+ * `mrkt_ctg` ASC로 정렬해 두는 이유는 `src/lib/mcp/format.ts`의 `toBondSearchResultRows`가
+ * 종목당 1개만 남길 때(현재 "표시할 시세 1건"만 필요) 어느 행이 남을지 결정적이게(KTS=1
+ * 우선) 만들기 위함이다 — 정렬 없이 두면 어느 시장이 남을지 D1 실행마다 달라질 수 있다.
+ */
+export const BOND_SEARCH_LATEST_PRICE_SQL =
+  `SELECT p.isin_cd, p.bas_dt, p.mrkt_ctg, p.clpr_prc, p.clpr_vs, p.clpr_bnf_rt, p.trqu\n` +
+  `FROM bond_price p\n` +
+  `JOIN (\n` +
+  `  SELECT isin_cd, MAX(bas_dt) mx FROM bond_price\n` +
+  `  WHERE isin_cd IN (SELECT value FROM json_each(?1))\n` +
+  `  GROUP BY isin_cd\n` +
+  `) m ON p.isin_cd = m.isin_cd AND p.bas_dt = m.mx\n` +
+  `ORDER BY p.isin_cd, p.mrkt_ctg ASC;`;
