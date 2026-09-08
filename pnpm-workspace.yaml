@@ -1,3 +1,7 @@
+minimumReleaseAgeExclude:
+  - miniflare
+  - wrangler
+
 allowBuilds:
   esbuild: true
   lefthook: true
