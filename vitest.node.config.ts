@@ -13,6 +13,18 @@ import { defaultExclude } from "vitest/config";
 export default getViteConfig({
   test: {
     name: "node",
-    exclude: [...defaultExclude, "tests/workers/**", "tests/components/**", "tests/hooks/**", "e2e/**"],
+    exclude: [
+      ...defaultExclude,
+      "tests/workers/**",
+      "tests/components/**",
+      "tests/hooks/**",
+      "e2e/**",
+      // .claude/worktrees/<name>/ 는 프로젝트 루트 **안에** 만들어지는 git worktree(저장소 전체
+      // 사본)다. .git/info/exclude로 git-ignore돼 있지만 vitest는 그 파일을 읽지 않으므로,
+      // 제외하지 않으면 이 프로젝트의 기본 include(**/*.{test,spec}.*)가 worktree 사본의
+      // tests/**까지 통째로 수집한다 — browser 전용 테스트가 forks 풀로 끌려 들어가
+      // "vitest/browser can be imported only inside the Browser Mode"로 무더기 실패한다.
+      ".claude/**",
+    ],
   },
 });

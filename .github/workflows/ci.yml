@@ -1,0 +1,113 @@
+# GitHub는 미러다 — origin은 `git.ptcookie.net`이고, 그쪽 post-receive 훅이 이 저장소로
+# force-push한다. 그래서 이 파일은 다음 세 가지를 전제로 쓰여 있다.
+#
+#   * 저장소에 아무것도 쓰지 않는다. 워크플로가 만든 커밋은 다음 미러 push에 그대로
+#     지워지므로 CI는 "검사"만 한다 — 자동 포매팅도, 재생성한 파일(worker-configuration.d.ts
+#     등) 커밋도 없다. 그건 작성자의 몫이고 lefthook(lefthook.yml)이 받쳐 준다.
+#   * 배포는 여기서 하지 않는다. Cloudflare가 저장소에 직접 연결돼 배포를 담당한다.
+#   * `push`는 main/production으로 좁혔다. PR 브랜치가 이 저장소 안에 살기 때문에
+#     (Dependabot의 브랜치가 그렇다) 범위를 안 좁히면 PR마다 두 번씩 돈다.
+#     force-push로 히스토리가 갈리면 진행 중인 실행은 의미가 없어지므로 concurrency로 취소한다.
+#
+# 미러는 자체 병합을 받지 않으므로(승인된 PR은 로컬로 가져와 origin에 push하고, 그 결과가
+# 여기로 흘러 들어온다) 이 검사들은 머지 게이트가 아니라 사후 확인이다.
+name: CI
+
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # lefthook의 pre-commit(tsc/eslint/prettier)과 같은 검사에 프로덕션 빌드를 더한 것.
+  # 브라우저 설치가 필요 없어 세 잡 중 가장 빨리 결과가 나온다.
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # `version:` 없음 — 액션이 package.json의 `packageManager` 필드를 그대로 읽는다.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # tsconfig.json이 include하는 `.astro/types.d.ts`는 git-ignore 대상이라 새 체크아웃엔
+      # 없다. 로컬에서 tsc가 그냥 도는 건 dev/build가 이미 만들어 뒀기 때문 — CI에서는
+      # 먼저 생성해야 한다.
+      - name: Generate Astro types
+        run: pnpm exec astro sync
+      - run: pnpm exec tsc --noEmit
+      # `pnpm lint`는 --max-warnings를 걸지 않는다(현재 shadcn 생성 코드에 경고 3개가 있다).
+      # 로컬 훅과 같은 기준을 유지하려는 의도이니 여기서 임의로 조이지 말 것.
+      - run: pnpm lint
+      - name: Prettier
+        run: pnpm exec prettier --check .
+      # 시크릿·바인딩 없이 도는 순수 빌드다(오픈API 키는 런타임에만 쓰인다).
+      - run: pnpm build
+
+  # node/browser/workers 세 프로젝트를 한 번에 돈다(vitest.config.ts). browser 프로젝트가
+  # Vitest Browser Mode로 chromium/firefox/webkit 3종을 실제로 띄우므로 브라우저 설치가 필수다.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `--with-deps`는 CI에서만 필요하다 — GitHub 러너 이미지엔 webkit/firefox의
+      # 시스템 라이브러리가 없다.
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test --run
+      # Browser Mode가 실패 시 남기는 스크린샷·첨부파일. 실패한 경우가 정확히 이게 필요한
+      # 상황이라 실패에도 올린다(취소된 실행은 제외 — 위 concurrency가 자주 취소한다).
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: vitest-attachments
+          path: |
+            .vitest-attachments
+            tests/**/__screenshots__
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # test 잡과 독립적으로 돈다. 각 스펙이 /api/snapshot/*를 page.route()로 모킹하므로
+  # (e2e/fixtures/snapshot.ts) D1 시드(pnpm seed:local)가 필요 없고, webServer가 `pnpm dev`를
+  # 직접 띄우므로 dist/ 빌드 산출물도 필요 없다.
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # CI(process.env.CI)에서는 playwright.config.ts가 chromium/Mobile Chrome에 더해
+      # firefox/webkit 프로젝트까지 켠다.
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: ignore
+          retention-days: 7

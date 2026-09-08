@@ -74,4 +74,35 @@ describe("ScreenerTable", () => {
     const link = screen.getByRole("link", { name: "테스트채권0" });
     await expect.element(link).toHaveAttribute("href", "/bond/KR0000000000");
   });
+
+  // sticky 1열은 뒤로 스크롤되는 다른 셀 위에 그려지므로 hover 여부와 무관하게 항상
+  // 불투명해야 한다 — 반투명이면 뒤 셀 글자가 비쳐 보인다(실제로 있었던 버그).
+  // color-mix() 결과는 브라우저마다 computed value 직렬화가 달라(oklab()/rgb() 등)
+  // 문자열로 비교하지 않고, canvas에 칠해 alpha 채널만 측정한다.
+  test("sticky 1열 셀 배경은 hover 상태에서도 불투명하다", async () => {
+    await page.viewport(1200, 800);
+    const screen = await render(<Harness rows={makeRows(1)} />);
+    const cell = screen.container.querySelector("tbody tr td:first-child");
+    if (!cell) throw new Error("첫 번째 셀을 찾지 못했습니다");
+
+    const before = getComputedStyle(cell).backgroundColor;
+    expect(alphaOf(before)).toBe(255);
+
+    await screen.getByText("테스트채권0").hover();
+    const after = getComputedStyle(cell).backgroundColor;
+    expect(alphaOf(after)).toBe(255);
+    expect(after).not.toBe(before); // hover 틴트가 실제로 적용됐는지도 함께 확인
+  });
 });
+
+function alphaOf(color: string): number {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("2d context를 생성하지 못했습니다");
+  ctx.clearRect(0, 0, 1, 1);
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 1, 1);
+  return ctx.getImageData(0, 0, 1, 1).data[3];
+}
