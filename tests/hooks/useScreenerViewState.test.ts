@@ -118,6 +118,22 @@ describe("상태 변경", () => {
     expect(result.current.state.filters).toEqual(EMPTY_FILTERS);
   });
 
+  test("applyFiltersAndSorting은 필터·정렬을 한 번에 바꾸고 pageIndex를 리셋한다", async () => {
+    window.history.replaceState(null, "", `${window.location.pathname}?page=3`);
+    const { result, act } = await renderHook(() => useScreenerViewState());
+    expect(result.current.state.pageIndex).toBe(2);
+
+    await act(() => {
+      result.current.applyFiltersAndSorting({ ...EMPTY_FILTERS, q: "국채" }, [{ id: "bondBal", desc: false }]);
+    });
+
+    expect(result.current.state.filters.q).toBe("국채");
+    expect(result.current.state.sorting).toEqual([{ id: "bondBal", desc: false }]);
+    expect(result.current.state.pageIndex).toBe(0);
+    // 중간 상태가 남지 않고 최종 상태 한 벌만 URL에 반영된다.
+    expect(window.location.search.replace(/^\?/, "")).toBe(encodeViewState(result.current.state));
+  });
+
   test("pushState가 아니라 replaceState를 쓴다 — 연속 변경 후에도 history.length가 늘지 않는다", async () => {
     const before = window.history.length;
     const { result, act } = await renderHook(() => useScreenerViewState());

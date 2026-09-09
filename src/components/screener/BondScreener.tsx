@@ -1,9 +1,11 @@
-import { useDeferredValue, useMemo } from "react";
+import { useCallback, useDeferredValue, useMemo } from "react";
 import { useTable, type PaginationState } from "@tanstack/react-table";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { useScreenerViewState } from "@/hooks/useScreenerViewState";
 import { useScreenerData } from "@/hooks/useScreenerData";
+import { useFilterPresets } from "@/hooks/useFilterPresets";
 import { applyFilters, buildFilterOptions } from "@/lib/screener/filters";
+import { decodePresetQuery, encodePresetQuery } from "@/lib/screener/presets";
 import type { ScreenerRow } from "@/lib/screener/types";
 import { screenerColumns, screenerFeatures } from "./columns";
 import { ScreenerError } from "./ScreenerError";
@@ -18,7 +20,22 @@ function BondScreenerInner() {
   const { data, isPending, isError, error, refetch } = useScreenerData();
   const rows = data?.rows ?? EMPTY_ROWS;
 
-  const { state, setFilters, setSorting, setPagination, resetFilters } = useScreenerViewState();
+  const { state, setFilters, setSorting, setPagination, applyFiltersAndSorting, resetFilters } = useScreenerViewState();
+  const { presets, savePreset, deletePreset } = useFilterPresets();
+
+  // 프리셋에 싣는 값은 deferredFilters가 아니라 state.filters다 — 지연 값은 렌더링 부하를
+  // 미루기 위한 것이라, 저장 버튼을 누른 시점의 화면 입력과 한 틱 어긋날 수 있다.
+  const presetQuery = useMemo(
+    () => encodePresetQuery({ filters: state.filters, sorting: state.sorting }),
+    [state.filters, state.sorting],
+  );
+  const applyPreset = useCallback(
+    (query: string) => {
+      const { filters, sorting } = decodePresetQuery(query);
+      applyFiltersAndSorting(filters, sorting);
+    },
+    [applyFiltersAndSorting],
+  );
 
   // 검색창 입력은 즉시 echo해야 하므로 state.filters 그대로 바인딩하고, 29k행 재필터링처럼
   // 무거운 계산만 지연시킨다 — 타이핑이 렌더링에 막히지 않는다.
@@ -59,6 +76,11 @@ function BondScreenerInner() {
         options={filterOptions}
         onFiltersChange={setFilters}
         onReset={resetFilters}
+        presets={presets}
+        presetQuery={presetQuery}
+        onSavePreset={savePreset}
+        onDeletePreset={deletePreset}
+        onApplyPreset={applyPreset}
         resultCount={filteredRows.length}
         totalCount={rows.length}
       />

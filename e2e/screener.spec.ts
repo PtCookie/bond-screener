@@ -99,3 +99,31 @@ test("상태 지속성 — 쿼리 없이 재진입해도 sessionStorage로 복�
   await expect(page).toHaveURL(/q=/);
   await expect(page.getByPlaceholder("종목명·발행인·ISIN 검색")).toHaveValue("유일채권7");
 });
+
+test("필터 프리셋 — 이름 붙여 저장하면 리로드 후에도 남고, 클릭하면 필터가 복원된다", async ({ page }) => {
+  await page.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권7");
+  await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
+
+  // 트리거의 접근성 이름에는 저장된 개수가 붙는다("저장된 필터 1") — 정규식으로 받는다.
+  const presetTrigger = page.getByRole("button", { name: /저장된 필터/ });
+  const popover = page.locator('[data-slot="popover-content"]');
+
+  await presetTrigger.click();
+  await popover.getByLabel("프리셋 이름").fill("내 프리셋");
+  await popover.getByRole("button", { name: "저장" }).click();
+  // 프리셋 이름 버튼과 "내 프리셋 삭제" 버튼이 부분일치로 겹친다 — exact로 구분한다.
+  await expect(popover.getByRole("button", { name: "내 프리셋", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // localStorage는 리로드를 넘어 남는다(sessionStorage 기반 뷰 상태와 달리 세션도 넘는다).
+  await page.reload();
+  await page.getByRole("button", { name: "초기화" }).click();
+  await expect(page.getByText("총 30건")).toBeVisible();
+
+  await presetTrigger.click();
+  await popover.getByRole("button", { name: "내 프리셋", exact: true }).click();
+
+  await expect(page.getByPlaceholder("종목명·발행인·ISIN 검색")).toHaveValue("유일채권7");
+  await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
+  await expect(page).toHaveURL(/q=/);
+});
