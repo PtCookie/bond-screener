@@ -1,7 +1,7 @@
 import { CaretDownIcon } from "@phosphor-icons/react";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 type RangeInputType = "number" | "date";
@@ -52,7 +52,23 @@ export function ScreenerFilterRange({
         <span className={active ? undefined : "text-muted-foreground"}>{label}</span>
         <CaretDownIcon data-icon="inline-end" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-64">
+      <PopoverContent align="start" className="w-64 gap-2">
+        {/* 다중선택 필터와 같은 "이 필터만 해제" 헤더 — 최소·최대를 각각 지우지 않아도 된다. */}
+        <PopoverHeader className="flex-row items-center justify-between gap-2">
+          <PopoverTitle className="text-sm">{label}</PopoverTitle>
+          <Button
+            variant="ghost"
+            size="xs"
+            aria-label={`${label} 해제`}
+            disabled={!active}
+            onClick={() => {
+              onChange(null, null);
+            }}
+          >
+            해제
+          </Button>
+        </PopoverHeader>
+
         <div className="flex flex-col gap-2">
           <div className="flex flex-1 flex-col gap-1">
             <span className="text-muted-foreground text-xs">최소</span>
