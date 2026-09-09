@@ -48,7 +48,7 @@ test("만기일 범위 필터 — 최소값을 입력하면 결과가 좁혀진�
 test("헤더 클릭 정렬이 3-state로 순환한다", async ({ page }) => {
   // 필터 바의 "표면이율(%)" 트리거는 부분일치로도 "표면이율"에 매치하므로 exact로 구분한다.
   const header = page.getByRole("button", { name: "표면이율", exact: true });
-  const firstRowCell = page.locator("tbody tr").first().locator("td").nth(5); // 표면이율 컬럼
+  const firstRowCell = page.locator("tbody tr").first().locator("td").nth(4); // 표면이율 컬럼
 
   await header.click();
   const afterFirstClick = await firstRowCell.textContent();

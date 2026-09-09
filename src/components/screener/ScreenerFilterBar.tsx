@@ -8,9 +8,6 @@ import { ScreenerFilterMultiSelect } from "./ScreenerFilterMultiSelect";
 import { ScreenerFilterRange } from "./ScreenerFilterRange";
 import { ScreenerPresetMenu } from "./ScreenerPresetMenu";
 
-/** `bondBal`은 원 단위로 저장돼 있다 — 필터 입력은 억 단위가 자연스러워 여기서만 환산한다. */
-const WON_PER_EOK = 1e8;
-
 interface ScreenerFilterBarProps {
   filters: ScreenerFilters;
   options: ScreenerFilterOptions;
@@ -95,17 +92,6 @@ export function ScreenerFilterBar({
         min={filters.srfcInrtMin}
         max={filters.srfcInrtMax}
         onChange={(srfcInrtMin, srfcInrtMax) => patch({ srfcInrtMin, srfcInrtMax })}
-      />
-      <ScreenerFilterRange
-        label="잔액(억)"
-        min={filters.bondBalMin === null ? null : filters.bondBalMin / WON_PER_EOK}
-        max={filters.bondBalMax === null ? null : filters.bondBalMax / WON_PER_EOK}
-        onChange={(min, max) =>
-          patch({
-            bondBalMin: min === null ? null : min * WON_PER_EOK,
-            bondBalMax: max === null ? null : max * WON_PER_EOK,
-          })
-        }
       />
       <ScreenerFilterRange
         label="수익률(%)"

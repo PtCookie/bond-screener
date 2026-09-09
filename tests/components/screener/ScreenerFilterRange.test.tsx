@@ -22,9 +22,9 @@ describe("ScreenerFilterRange", () => {
 
   test("숫자 입력 — 값 변경 시 min/max 쌍으로 콜백된다", async () => {
     const onChange = vi.fn();
-    const screen = await render(<ScreenerFilterRange label="잔액(억)" min={null} max={null} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "잔액(억)" }));
-    await screen.getByLabelText("잔액(억) 최대").fill("500");
+    const screen = await render(<ScreenerFilterRange label="수익률(%)" min={null} max={null} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "수익률(%)" }));
+    await screen.getByLabelText("수익률(%) 최대").fill("500");
     expect(onChange).toHaveBeenLastCalledWith(null, 500);
   });
 

@@ -33,7 +33,7 @@ function fromInputValue(raw: string, inputType: RangeInputType): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** 만기일·표면이율·잔액·수익률이 공유하는 "min/max 팝오버" 패턴. */
+/** 만기일·표면이율·수익률이 공유하는 "min/max 팝오버" 패턴. */
 export function ScreenerFilterRange({
   label,
   min,
