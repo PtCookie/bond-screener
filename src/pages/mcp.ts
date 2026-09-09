@@ -11,8 +11,11 @@
  * 파일 자체를 실행할 수 없어(`vitest.workers.config.ts` 주석 참고) 테스트 가능한 로직을
  * 전부 라우트 밖에 두는 이 저장소의 기존 규약을 그대로 따른다.
  *
- * 인증은 두지 않는다 — 이 데이터는 이미 스크리너 화면·`/api/bond/*`로 공개돼 있어 MCP로
- * 새로 노출되는 정보가 없다. 남용 방지는 기존 `BOND_API_LIMITER`(IP당 분당 30회)만 건다.
+ * 인증은 `MCP_AUTH_TOKEN` 공유 시크릿 하나다(OAuth 아님) — Claude 커스텀 커넥터의
+ * "요청 헤더"에 `Authorization: Bearer <token>`을 등록해 쓴다. 검증 로직은
+ * `src/lib/mcp/auth.ts`에 있고, 시크릿이 없으면 503으로 막는다(fail-closed).
+ * 남용 방지용 `BOND_API_LIMITER`(IP당 분당 30회)는 인증보다 **먼저** 건다 — 토큰
+ * 무차별 대입도 같은 한도에 묶기 위함이다.
  *
  * CORS는 Claude 커넥터(Anthropic 클라우드에서 서버-서버로 호출) 자체에는 불필요하지만,
  * 브라우저 기반 MCP Inspector로 로컬 검증할 때 필요해 얇게 얹는다.
@@ -25,6 +28,7 @@ import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createBondMcpServer } from "@/lib/mcp/server";
+import { authorizeMcpRequest, MCP_TOKEN_HEADER } from "@/lib/mcp/auth";
 import { checkRateLimit } from "@/lib/api/params";
 
 export const prerender = false;
@@ -37,17 +41,24 @@ const handler = createMcpHandler(() => createBondMcpServer(env.DB));
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
-  "access-control-allow-headers": "content-type, accept, mcp-protocol-version, mcp-session-id",
+  "access-control-allow-headers": `content-type, accept, authorization, ${MCP_TOKEN_HEADER}, mcp-protocol-version, mcp-session-id`,
 };
 
+function withCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(CORS_HEADERS)) headers.set(key, value);
+  return new Response(response.body, { status: response.status, headers });
+}
+
+// 프리플라이트는 인증 헤더를 싣지 못하므로 게이트 앞에 둔다.
 export const OPTIONS: APIRoute = () => new Response(null, { status: 204, headers: CORS_HEADERS });
 
 export const ALL: APIRoute = async ({ request }) => {
   const limited = await checkRateLimit(env.BOND_API_LIMITER, request);
   if (limited) return limited;
 
-  const response = await handler.fetch(request);
-  const headers = new Headers(response.headers);
-  for (const [key, value] of Object.entries(CORS_HEADERS)) headers.set(key, value);
-  return new Response(response.body, { status: response.status, headers });
+  const auth = await authorizeMcpRequest(request, env.MCP_AUTH_TOKEN);
+  if (auth instanceof Response) return withCors(auth);
+
+  return withCors(await handler.fetch(request, { authInfo: auth }));
 };

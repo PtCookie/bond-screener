@@ -7,6 +7,7 @@ interface __BaseEnv_Env {
 	BOND_API_LIMITER: RateLimit;
 	ASSETS: Fetcher;
 	BOND_API_SERVICE_KEY: string;
+	MCP_AUTH_TOKEN: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
