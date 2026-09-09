@@ -83,9 +83,15 @@ describe("toBondSearchResultRows", () => {
     bond_expr_dt: 20260315,
     bond_srfc_inrt: 3.125,
     bond_int_tcd: "01",
+    scrs_itms_kcd: "1101",
     bond_bal: 5_000_000_000,
     kis_grade: "AAA",
   };
+
+  const codeLabels = new Map([
+    ["scrsItmsKcd:1101", "국채"],
+    ["bondIntTcd:01", "이표채"],
+  ]);
 
   test("최신 시세가 있으면 latestPrice를 붙인다", () => {
     const price: BondSearchLatestPriceRow = {
@@ -108,6 +114,30 @@ describe("toBondSearchResultRows", () => {
 
   test("행이 없으면 빈 배열", () => {
     expect(toBondSearchResultRows([], [])).toEqual([]);
+  });
+
+  test("codeLabels로 종류·이자유형 코드의 라벨을 붙인다", () => {
+    const [result] = toBondSearchResultRows([row], [], codeLabels);
+    expect(result).toMatchObject({
+      kind: "1101",
+      kindName: "국채",
+      interestType: "01",
+      interestTypeName: "이표채",
+    });
+  });
+
+  test("codeLabels에 없는 코드는 라벨이 null이고 코드 원문은 유지된다", () => {
+    const [result] = toBondSearchResultRows([{ ...row, scrs_itms_kcd: "9999" }], [], codeLabels);
+    expect(result.kind).toBe("9999");
+    expect(result.kindName).toBeNull();
+  });
+
+  test("코드 자체가 null이면 코드·라벨 모두 null", () => {
+    const [result] = toBondSearchResultRows([{ ...row, scrs_itms_kcd: null, bond_int_tcd: null }], [], codeLabels);
+    expect(result.kind).toBeNull();
+    expect(result.kindName).toBeNull();
+    expect(result.interestType).toBeNull();
+    expect(result.interestTypeName).toBeNull();
   });
 
   test("같은 종목에 두 시장 시세가 있으면 먼저 등장한(mrkt_ctg가 작은) 쪽을 결정적으로 채택한다", () => {

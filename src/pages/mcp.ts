@@ -11,8 +11,11 @@
  * 파일 자체를 실행할 수 없어(`vitest.workers.config.ts` 주석 참고) 테스트 가능한 로직을
  * 전부 라우트 밖에 두는 이 저장소의 기존 규약을 그대로 따른다.
  *
- * 인증은 두지 않는다 — 이 데이터는 이미 스크리너 화면·`/api/bond/*`로 공개돼 있어 MCP로
- * 새로 노출되는 정보가 없다. 남용 방지는 기존 `BOND_API_LIMITER`(IP당 분당 30회)만 건다.
+ * **인증은 선택이고, 토큰은 rate limit 면제 키다** — 헤더 없이 부르면 `BOND_API_LIMITER`
+ * (IP당 분당 30회)가 걸린 채 통과하고, `MCP_AUTH_TOKEN`(공유 시크릿, OAuth 아님)을 보내면
+ * 한도가 면제된다. 틀린 토큰은 익명으로 강등하지 않고 401이지만 그때도 한도를 먼저 소비한다
+ * (무차별 대입 방어). 정책 판단 전체와 그 근거는 `src/lib/mcp/auth.ts`의 `resolveMcpAccess`에
+ * 있고 — 표 형태로 정리돼 있다 — 이 라우트는 그걸 호출만 한다.
  *
  * CORS는 Claude 커넥터(Anthropic 클라우드에서 서버-서버로 호출) 자체에는 불필요하지만,
  * 브라우저 기반 MCP Inspector로 로컬 검증할 때 필요해 얇게 얹는다.
@@ -25,7 +28,7 @@ import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createBondMcpServer } from "@/lib/mcp/server";
-import { checkRateLimit } from "@/lib/api/params";
+import { resolveMcpAccess, MCP_TOKEN_HEADER } from "@/lib/mcp/auth";
 
 export const prerender = false;
 
@@ -37,17 +40,24 @@ const handler = createMcpHandler(() => createBondMcpServer(env.DB));
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
-  "access-control-allow-headers": "content-type, accept, mcp-protocol-version, mcp-session-id",
+  "access-control-allow-headers": `content-type, accept, authorization, ${MCP_TOKEN_HEADER}, mcp-protocol-version, mcp-session-id`,
 };
 
-export const OPTIONS: APIRoute = () => new Response(null, { status: 204, headers: CORS_HEADERS });
-
-export const ALL: APIRoute = async ({ request }) => {
-  const limited = await checkRateLimit(env.BOND_API_LIMITER, request);
-  if (limited) return limited;
-
-  const response = await handler.fetch(request);
+function withCors(response: Response): Response {
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(CORS_HEADERS)) headers.set(key, value);
   return new Response(response.body, { status: response.status, headers });
+}
+
+// 프리플라이트는 인증 헤더를 싣지 못하므로 게이트 앞에 둔다.
+export const OPTIONS: APIRoute = () => new Response(null, { status: 204, headers: CORS_HEADERS });
+
+export const ALL: APIRoute = async ({ request }) => {
+  const access = await resolveMcpAccess(request, env.MCP_AUTH_TOKEN, env.BOND_API_LIMITER);
+  if (access.kind === "deny") return withCors(access.response);
+
+  // SDK는 `authInfo`를 옵션으로 받아 핸들러에 그대로 흘려보낸다(헤더에서 유도하지 않는다) —
+  // 익명 요청은 아예 넘기지 않는다.
+  const extra = access.authInfo ? { authInfo: access.authInfo } : undefined;
+  return withCors(await handler.fetch(request, extra));
 };

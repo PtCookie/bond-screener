@@ -15,10 +15,12 @@ flowchart LR
     D1 -->|주 1회 로컬/CI에서 빌드| R2[(R2<br/>정적 스냅샷 JSON)]
     R2 -->|목록 조회| C[브라우저]
     D1 -->|종목 상세·시계열| C
+    D1 -->|/mcp 툴 호출| M[Claude<br/>MCP 커넥터]
 ```
 
 - **목록 화면**은 R2 스냅샷만 받는다 → D1 read 0건.
 - **종목 상세·가격 시계열**만 D1을 직접 쿼리한다(요청당 쿼리 3~4개).
+- **`/mcp` 엔드포인트**로 같은 데이터를 Claude에 툴로 노출한다 ([MCP 서버](#mcp-서버) 참고).
 - cron은 **1 tick(1분)에 정확히 1페이지**만 처리한다 — Workers Free tier의 CPU 10ms 예산에 맞추기 위함.
 
 ## 기술 스택
@@ -57,9 +59,12 @@ pnpm install
 
 ```ini
 BOND_API_SERVICE_KEY="발급받은-인증키"
+MCP_AUTH_TOKEN="임의의-긴-난수-문자열"
 ```
 
-> 두 파일 모두 `.gitignore` 대상이다. 배포된 Worker에는 전달되지 않으므로, 배포 시에는 별도로 `wrangler secret put BOND_API_SERVICE_KEY`를 실행해야 한다.
+`MCP_AUTH_TOKEN`은 `/mcp` 엔드포인트의 **rate limit 면제 키**다(선택). 값은 직접 정하면 된다(`openssl rand -hex 32` 등). 없어도 `/mcp`는 동작하며, 면제 수단만 사라진다 — [MCP 서버](#mcp-서버) 참고.
+
+> 두 파일 모두 `.gitignore` 대상이다. 배포된 Worker에는 전달되지 않으므로, 배포 시에는 별도로 `wrangler secret put BOND_API_SERVICE_KEY`와 `wrangler secret put MCP_AUTH_TOKEN`을 실행해야 한다.
 
 ### 로컬 데이터 채우기
 
@@ -159,8 +164,10 @@ src/
     sync/         # cron tick 오케스트레이션, 순수 스케줄링 로직
     r2/           # R2 키 네이밍, 아카이브, 시세 델타 스냅샷
     snapshot/     # 목록 스냅샷 v2 포맷·인코드·디코드·병합
+    mcp/          # MCP 서버 팩토리·툴 3종 정의·응답 포맷·공유 시크릿 인증
   pages/
     api/          # 서버 API 라우트 (snapshot 프록시, bond/[id] 상세·시계열)
+    mcp.ts        # MCP 엔드포인트 — 라우팅·CORS·rate limit·인증 게이트만
   worker.ts       # Workers 진입점 (fetch 위임 + scheduled)
 tests/            # Vitest (node 프로젝트) + tests/workers/ (workerd 런타임)
 ```
@@ -174,6 +181,94 @@ tests/            # Vitest (node 프로젝트) + tests/workers/ (workerd 런타�
 | `GET /api/bond/[id]/prices`   | 가격 시계열 — `from`/`to`(기본 최근 1년)·`market` 필터       |
 
 `id`는 12자리 ISIN 또는 9자리 단축코드(`srtnCd`) 둘 다 받는다.
+
+## MCP 서버
+
+`POST /mcp`가 채권 데이터를 [MCP(Model Context Protocol)](https://modelcontextprotocol.io) 툴로 노출한다. Claude(웹·데스크톱·모바일 공통)의 **커스텀 커넥터**에 URL을 그대로 등록하면 대화 중에 종목을 검색·조회할 수 있다.
+
+`@modelcontextprotocol/server`(SDK v2)의 `createMcpHandler`로 구현한 **stateless Streamable HTTP**다 — Durable Object도 세션도 없고, 요청마다 새 `McpServer` 인스턴스를 만들어 요청 간 상태가 섞이지 않는다.
+
+### 툴
+
+| 툴                | 설명                                                                     |
+| :---------------- | :----------------------------------------------------------------------- |
+| `search_bonds`    | 조건 검색 — 발행인·종목명·채권종류·만기·표면이율·신용등급·발행잔액·최근 거래 여부 |
+| `get_bond`        | 종목 상세 (`verbose: true`면 신용등급 이력 + 전체 발행조건 75개 필드)    |
+| `get_bond_prices` | 일별 시세 시계열 (`from`/`to`·`market` 필터, 최대 1,000행)               |
+
+`search_bonds` 인자:
+
+| 인자                          | 설명                                                              |
+| :---------------------------- | :----------------------------------------------------------------- |
+| `issuer` · `name`             | 발행인명 · 종목명 부분일치                                        |
+| `kind`                        | 채권 종류 — 한글 라벨(`국채`/`지방채`/`특수채`/`지방공사채`/`금융채`/`유동화SPC채`/`유사집합투자기구채`/`일반회사채`/`MBS`/`SLBS`) |
+| `maturityFrom` · `maturityTo` | 만기일 범위 (YYYYMMDD)                                            |
+| `couponMin` · `couponMax`     | 표면이율(%) 범위                                                  |
+| `grade` · `minGrade`          | KIS 신용등급 — 화이트리스트 또는 하한(`AA-`면 `AAA`~`AA-`). 함께 주면 교집합 |
+| `balanceMin`                  | 발행잔액 하한(원)                                                 |
+| `tradedSince`                 | 이 날짜 이후 거래 기록이 있는 종목만 (YYYYMMDD)                   |
+| `sort`                        | `exprDt`(기본) · `bondBal` · `coupon` · `volume`                  |
+| `limit`                       | 기본 20, 최대 50                                                  |
+
+신용등급은 **KIS(한국신용평가) 기준만** 노출한다. 중간 등급 표기는 `AA`가 아니라 `AA0`다(`A0`/`BBB0`/`BB0`/`B0`도 마찬가지).
+
+`sort: "volume"`은 각 종목이 **마지막으로 거래된 날**의 거래량 기준이라, 오래전 대량 거래가 상위에 올 수 있다 — 최근 활발한 종목을 찾으려면 `tradedSince`와 함께 쓴다. 상장 종목 대부분은 거래가 드물다.
+
+> `search_bonds`만 D1을 직접 검색한다(스크리너 목록 조회는 R2 스냅샷이라 D1 read 0건). 발행인·종목명 LIKE는 `bond` 테이블 전체 스캔이고 거래량 정렬은 `bond_price`를 종목별 PK 시크로 훑는다 — 호출 빈도가 사람 대화 수준이라 감내하는 트레이드오프다.
+
+### 인증 — 선택 사항
+
+**인증은 필수가 아니다.** 토큰의 역할은 접근 통제가 아니라 **rate limit 면제**다 — 노출되는 데이터가 이미 스크리너 화면·`/api/bond/*`로 공개돼 있어 익명 접근이 새로 정보를 새게 하지 않기 때문이다.
+
+| 요청 | 결과 |
+| :--- | :--- |
+| 헤더 없음 | 통과 — 단 **IP당 분당 30회** 한도 |
+| 올바른 토큰 | 통과 — **한도 면제** |
+| 틀린 토큰 | `401` (한도도 함께 소비된다) |
+
+토큰은 다음 두 헤더 중 하나로 보낸다:
+
+```
+authorization: Bearer <MCP_AUTH_TOKEN>
+x-mcp-token: <MCP_AUTH_TOKEN>     # Authorization을 예약어로 막는 클라이언트용 (접두사 없음)
+```
+
+`Authorization`이 있으면 대체 헤더는 보지 않는다. 토큰 비교는 SHA-256 다이제스트끼리의 상수시간 비교다.
+
+> 틀린 토큰을 익명으로 강등하지 않고 401로 거부하는 이유는, 스테일 토큰이나 배포 누락이 "왜 자주 429가 나지" 형태로 조용히 숨는 것보다 호출자가 바로 알아차리는 편이 낫기 때문이다. 대신 401을 내기 **전에** 한도를 소비해 토큰 무차별 대입이 무제한으로 돌지 않게 한다.
+
+`MCP_AUTH_TOKEN`을 등록하지 않으면 면제 수단이 없을 뿐 엔드포인트는 그대로 공개 동작한다(이때 토큰을 보내면 검증할 수 없으므로 401이다).
+
+### Claude 커넥터 등록
+
+설정 → 커넥터 → 커스텀 커넥터 추가:
+
+- **URL** — `https://bond-screener.ptcookie.net/mcp`
+- **인증** — "없음". 그대로 두면 익명(분당 30회 한도)으로 붙는다.
+- **요청 헤더**(선택) — 한도를 면제받으려면 `Authorization` = `Bearer <MCP_AUTH_TOKEN>` 등록
+
+### 로컬 검증
+
+```bash
+# 익명 (헤더 없이) — 200이어야 한다
+curl -s -X POST http://localhost:4321/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+
+# 한도 면제 경로 — 위 명령에 헤더 하나만 추가
+#   -H "authorization: Bearer $MCP_AUTH_TOKEN"
+```
+
+또는 [MCP Inspector](https://github.com/modelcontextprotocol/inspector)로 붙는다 (헤더는 선택):
+
+```bash
+npx @modelcontextprotocol/inspector@latest
+```
+
+> `tools/call` 응답은 기본 설정(`responseMode: "auto"`)에서 SSE(`data: {...}` 프레임)로 온다 — 일반 JSON만 파싱하면 안 된다.
+
+> **429는 로컬에서 재현되지 않는다.** Cloudflare Rate Limiting 바인딩에는 로컬 시뮬레이터가 없어 로컬에서는 몇 번을 호출해도 제한되지 않는다 — 한도 동작은 배포 후 프로덕션에서만 확인할 수 있다.
 
 ## 오픈API 참고
 
@@ -197,7 +292,7 @@ tests/            # Vitest (node 프로젝트) + tests/workers/ (workerd 런타�
 - **채권기본정보** — 공공누리 **제2유형**: 출처표시 + **상업적 이용금지**. 상업적으로 활용하려면 원천 소유자인 한국예탁결제원(KSD)과 별도 정보이용계약이 필요하다 (portal@ksd.or.kr).
 - **채권시세정보** — 이용허락범위 제한 없음.
 
-서비스를 공개하거나 수익화할 경우 기본정보 쪽 라이선스 제약을 먼저 확인할 것.
+서비스를 공개하거나 수익화할 경우 기본정보 쪽 라이선스 제약을 먼저 확인할 것. [MCP 서버](#mcp-서버)로 노출되는 데이터도 같은 제약을 받는다 — 웹 화면과 동일한 데이터이며, MCP라고 해서 별도 허용 범위가 생기지 않는다.
 
 ## 기여 · 개발 가이드
 
