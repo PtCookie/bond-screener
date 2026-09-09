@@ -54,6 +54,7 @@
     "excludedCommands": [
       "pnpm dev *",
       "pnpm test *",
+      "pnpm test:e2e *",
       "pnpm exec wrangler *",
       "pnpm exec playwright *"
     ]
