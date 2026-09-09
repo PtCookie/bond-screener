@@ -48,7 +48,7 @@ test("만기일 범위 필터 — 최소값을 입력하면 결과가 좁혀진�
 test("헤더 클릭 정렬이 3-state로 순환한다", async ({ page }) => {
   // 필터 바의 "표면이율(%)" 트리거는 부분일치로도 "표면이율"에 매치하므로 exact로 구분한다.
   const header = page.getByRole("button", { name: "표면이율", exact: true });
-  const firstRowCell = page.locator("tbody tr").first().locator("td").nth(5); // 표면이율 컬럼
+  const firstRowCell = page.locator("tbody tr").first().locator("td").nth(4); // 표면이율 컬럼
 
   await header.click();
   const afterFirstClick = await firstRowCell.textContent();
@@ -125,5 +125,22 @@ test("필터 프리셋 — 이름 붙여 저장하면 리로드 후에도 남고
 
   await expect(page.getByPlaceholder("종목명·발행인·ISIN 검색")).toHaveValue("유일채권7");
   await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
+  await expect(page).toHaveURL(/q=/);
+});
+
+test("필터별 해제 — 신용등급만 비우고 검색어 필터는 유지된다", async ({ page }) => {
+  await page.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권2");
+  // "유일채권2"/"유일채권20"~"유일채권29" 11건 중 BBB(index 20~29)는 10건이다.
+  await expect(page.getByText("11건 / 전체 30건").first()).toBeVisible();
+
+  const popover = page.locator('[data-slot="popover-content"]');
+  await page.getByRole("button", { name: "신용등급 전체" }).click();
+  await popover.getByText("BBB", { exact: true }).click();
+  await expect(page.getByText("10건 / 전체 30건").first()).toBeVisible();
+
+  await popover.getByRole("button", { name: "신용등급 해제" }).click();
+  // 신용등급만 비었고 검색어는 그대로다 — 필터 바의 "초기화"와 달리 전체를 되돌리지 않는다.
+  await expect(page.getByRole("button", { name: "신용등급 전체" })).toBeVisible();
+  await expect(page.getByText("11건 / 전체 30건").first()).toBeVisible();
   await expect(page).toHaveURL(/q=/);
 });

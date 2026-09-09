@@ -22,9 +22,9 @@ describe("ScreenerFilterRange", () => {
 
   test("숫자 입력 — 값 변경 시 min/max 쌍으로 콜백된다", async () => {
     const onChange = vi.fn();
-    const screen = await render(<ScreenerFilterRange label="잔액(억)" min={null} max={null} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "잔액(억)" }));
-    await screen.getByLabelText("잔액(억) 최대").fill("500");
+    const screen = await render(<ScreenerFilterRange label="수익률(%)" min={null} max={null} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "수익률(%)" }));
+    await screen.getByLabelText("수익률(%) 최대").fill("500");
     expect(onChange).toHaveBeenLastCalledWith(null, 500);
   });
 
@@ -45,5 +45,23 @@ describe("ScreenerFilterRange", () => {
   test("활성(min/max 중 하나라도 값 있음) 여부와 무관하게 트리거 라벨은 항상 같다", async () => {
     const screen = await render(<ScreenerFilterRange label="수익률(%)" min={1} max={null} onChange={() => {}} />);
     await expect.element(screen.getByRole("button", { name: "수익률(%)" })).toBeInTheDocument();
+  });
+
+  test("팝오버의 해제 버튼은 min/max를 함께 비운다", async () => {
+    const onChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterRange label="만기일" inputType="date" min={20260101} max={20261231} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "만기일" }));
+    await userEvent.click(screen.getByRole("button", { name: "만기일 해제" }));
+
+    expect(onChange).toHaveBeenCalledWith(null, null);
+  });
+
+  test("min/max가 모두 null이면 해제 버튼이 disabled다", async () => {
+    const screen = await render(<ScreenerFilterRange label="수익률(%)" min={null} max={null} onChange={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "수익률(%)" }));
+
+    await expect.element(screen.getByRole("button", { name: "수익률(%) 해제" })).toBeDisabled();
   });
 });

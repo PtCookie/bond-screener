@@ -58,4 +58,24 @@ describe("ScreenerFilterMultiSelect", () => {
     await expect.element(screen.getByText("AAA")).toBeInTheDocument();
     await expect.element(screen.getByText("5")).toBeInTheDocument();
   });
+
+  test("팝오버의 해제 버튼은 이 필터만 비운다", async () => {
+    const onChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterMultiSelect label="신용등급" options={OPTIONS} selected={["AAA", "AA+"]} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "신용등급 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "신용등급 해제" }));
+
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
+  test("선택이 없으면 해제 버튼이 disabled다", async () => {
+    const screen = await render(
+      <ScreenerFilterMultiSelect label="신용등급" options={OPTIONS} selected={[]} onChange={() => {}} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "신용등급 전체" }));
+
+    await expect.element(screen.getByRole("button", { name: "신용등급 해제" })).toBeDisabled();
+  });
 });

@@ -20,7 +20,7 @@ interface ScreenerTableProps {
 }
 
 /**
- * 1열(종목명)을 좌측 sticky로 고정 — 13컬럼 가로 스크롤에서 종목명이 사라지면 표를 읽을 수 없다.
+ * 1열(종목명)을 좌측 sticky로 고정 — 11컬럼 가로 스크롤에서 종목명이 사라지면 표를 읽을 수 없다.
  * 행 hover 틴트(TableRow의 hover:bg-muted/50)는 반투명이라 sticky 셀에 그대로 쓰면 뒤로
  * 스크롤되는 다른 셀이 비친다 — bg-row-hover(불투명, muted를 background와 미리 합성한 값)로 대신 칠한다.
  */
@@ -42,7 +42,7 @@ function handleRowClick(e: MouseEvent<HTMLTableRowElement>, row: ScreenerRowMode
   window.location.href = `/bond/${row.original.isinCd}`;
 }
 
-/** 데스크톱(md 이상): 13컬럼 한 행, 종목명만 sticky. */
+/** 데스크톱(md 이상): 11컬럼 한 행, 종목명만 sticky. */
 function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: ScreenerRowModel[] }) {
   const headerGroups = table.getHeaderGroups();
   const headers = headerGroups[0]?.headers ?? [];

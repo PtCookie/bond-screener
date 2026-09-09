@@ -46,8 +46,8 @@ describe("encodePresetQuery / decodePresetQuery", () => {
 
   test("왕복해도 필터·정렬이 보존된다", () => {
     const slice = {
-      filters: { ...EMPTY_FILTERS, bondBalMin: 1_000_000_000, exprDtTo: 20301231 },
-      sorting: [{ id: "bondBal", desc: true }],
+      filters: { ...EMPTY_FILTERS, srfcInrtMin: 3, exprDtTo: 20301231 },
+      sorting: [{ id: "bondExprDt", desc: true }],
     };
     expect(decodePresetQuery(encodePresetQuery(slice))).toEqual(slice);
   });

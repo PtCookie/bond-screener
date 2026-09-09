@@ -101,28 +101,4 @@ describe("ScreenerFilterBar", () => {
     );
     await expect.element(screen.getByText("3건 / 전체 10건")).toBeInTheDocument();
   });
-
-  test("잔액 필터 — 표시는 억 단위, 콜백은 원 단위로 환산한다(WON_PER_EOK 왕복)", async () => {
-    const onFiltersChange = vi.fn();
-    const screen = await render(
-      <ScreenerFilterBar
-        filters={{ ...EMPTY_FILTERS, bondBalMin: 1_000_000_000_000, bondBalMax: null }} // 1e12원 = 10,000억
-        options={EMPTY_OPTIONS}
-        {...PRESET_PROPS}
-        onFiltersChange={onFiltersChange}
-        onReset={() => {}}
-        resultCount={10}
-        totalCount={10}
-      />,
-    );
-    await userEvent.click(screen.getByRole("button", { name: "잔액(억)" }));
-    await expect.element(screen.getByLabelText("잔액(억) 최소")).toHaveValue(10000);
-
-    await screen.getByLabelText("잔액(억) 최대").fill("500");
-    // 최소 1e12원은 그대로 유지된 채 최대만 5e10원(500억)으로 콜백된다.
-    const updater = onFiltersChange.mock.calls.at(-1)?.[0] as (prev: ScreenerFilters) => ScreenerFilters;
-    const next = updater({ ...EMPTY_FILTERS, bondBalMin: 1_000_000_000_000, bondBalMax: null });
-    expect(next.bondBalMin).toBe(1_000_000_000_000);
-    expect(next.bondBalMax).toBe(50_000_000_000);
-  });
 });
