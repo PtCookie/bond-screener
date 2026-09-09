@@ -93,8 +93,14 @@ describe("compareGrade", () => {
     expect(compareGrade("AA+", "A+")).toBeLessThan(0);
   });
 
-  test("A+가 BBB보다 먼저 온다", () => {
-    expect(compareGrade("A+", "BBB")).toBeLessThan(0);
+  test("A+가 BBB0보다 먼저 온다", () => {
+    expect(compareGrade("A+", "BBB0")).toBeLessThan(0);
+  });
+
+  test("0 접미사 중간 등급은 +와 -사이에 온다 (회귀: 등급이 맨 뒤로 밀리던 버그)", () => {
+    expect(compareGrade("AA+", "AA0")).toBeLessThan(0);
+    expect(compareGrade("AA0", "AA-")).toBeLessThan(0);
+    expect(compareGrade("A0", "BBB+")).toBeLessThan(0);
   });
 
   test("null은 항상 뒤로 정렬된다", () => {
