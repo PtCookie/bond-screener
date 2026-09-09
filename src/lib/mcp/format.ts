@@ -53,6 +53,11 @@ export function toBondSummary(isinCd: string, srtnCd: string | null, detail: Bon
   };
 }
 
+function label(codeLabels: ReadonlyMap<string, string>, domain: string, code: string | null): string | null {
+  if (code === null) return null;
+  return codeLabels.get(`${domain}:${code}`) ?? null;
+}
+
 /** `search_bonds` 출력 행 1개 — 검색 결과(`BondSearchRow`)에 최신 시세(있으면)를 붙인다. */
 export interface BondSearchResultRow {
   isinCd: string;
@@ -61,7 +66,12 @@ export interface BondSearchResultRow {
   issuer: string;
   maturityDate: number | null;
   couponRate: number | null;
+  /** `bond_int_tcd` 코드 원문과 그 라벨(이표채/할인채 등). 라벨은 `code_label`에 없으면 null. */
   interestType: string | null;
+  interestTypeName: string | null;
+  /** `scrs_itms_kcd` 코드 원문과 그 라벨(국채/금융채/일반회사채 등). */
+  kind: string | null;
+  kindName: string | null;
   outstandingBalance: number | null;
   kisGrade: string | null;
   latestPrice: {
@@ -77,6 +87,8 @@ export interface BondSearchResultRow {
 export function toBondSearchResultRows(
   rows: readonly BondSearchRow[],
   latestPrices: readonly BondSearchLatestPriceRow[],
+  /** `${domain}:${code}` → label (`searchBonds`가 함께 반환). 없으면 라벨은 전부 null이 된다. */
+  codeLabels: ReadonlyMap<string, string> = new Map(),
 ): BondSearchResultRow[] {
   // 같은 isin_cd가 같은 최신 bas_dt에 KTS·일반채권 두 시장 행을 낼 수 있다 —
   // `BOND_SEARCH_LATEST_PRICE_SQL`이 `mrkt_ctg ASC`로 정렬해 주므로, 먼저 만난 값만
@@ -96,6 +108,9 @@ export function toBondSearchResultRows(
       maturityDate: row.bond_expr_dt,
       couponRate: row.bond_srfc_inrt,
       interestType: row.bond_int_tcd,
+      interestTypeName: label(codeLabels, "bondIntTcd", row.bond_int_tcd),
+      kind: row.scrs_itms_kcd,
+      kindName: label(codeLabels, "scrsItmsKcd", row.scrs_itms_kcd),
       outstandingBalance: row.bond_bal,
       kisGrade: row.kis_grade,
       latestPrice: price

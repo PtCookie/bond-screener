@@ -1,4 +1,4 @@
-/** 스크리너 표시 전용 포매터. Worker/sync 로직과는 무관 — src/lib/bond/에 두지 않는다. */
+/** 스크리너 표시 전용 포매터. Worker/sync 로직과는 무관 — src/lib/bond/에 두지 않는다(신용등급 서열만 예외, 파일 끝 참고). */
 
 export const DASH = "—";
 
@@ -51,37 +51,9 @@ export function deltaTone(v: number | null): DeltaTone {
   return "flat";
 }
 
-/** 신용등급 서열: AAA가 최상위. 실측 분포에 등장하는 등급만 포함. null은 항상 뒤로. */
-const GRADE_ORDER = [
-  "AAA",
-  "AA+",
-  "AA0",
-  "AA-",
-  "A+",
-  "A0",
-  "A-",
-  "BBB+",
-  "BBB0",
-  "BBB-",
-  "BB+",
-  "BB0",
-  "BB-",
-  "B+",
-  "B0",
-  "B-",
-  "CCC",
-  "CC",
-  "C",
-  "D",
-] as const;
-
-const GRADE_RANK = new Map<string, number>(GRADE_ORDER.map((g, i) => [g, i]));
-
-export function compareGrade(a: string | null, b: string | null): number {
-  if (a === null && b === null) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  const ra = GRADE_RANK.get(a) ?? Number.MAX_SAFE_INTEGER;
-  const rb = GRADE_RANK.get(b) ?? Number.MAX_SAFE_INTEGER;
-  return ra - rb;
-}
+/**
+ * 신용등급 서열 비교는 `src/lib/bond/grade.ts`가 정본이다 — MCP `search_bonds`의 등급 하한
+ * 필터가 Worker 쪽에서 같은 서열을 써야 해 그쪽으로 옮겼다(이 파일의 "표시 전용" 원칙에서
+ * 유일하게 예외인 항목). 기존 import 경로를 유지하려고 여기서 재export한다.
+ */
+export { compareGrade } from "@/lib/bond/grade";

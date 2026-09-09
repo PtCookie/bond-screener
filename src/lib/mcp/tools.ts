@@ -11,6 +11,8 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/server";
 import { parseBondRef, parseDateRange, parseMarket } from "@/lib/api/params";
+import { BOND_KIND_LABELS } from "@/lib/bond/columns";
+import { GRADE_ORDER } from "@/lib/bond/grade";
 import { resolveIsinCd, fetchBondDetail } from "@/lib/d1/detail-repo";
 import { fetchBondPriceSeries } from "@/lib/d1/price-repo";
 import { searchBonds } from "@/lib/d1/search-repo";
@@ -44,7 +46,8 @@ export function registerBondTools(server: McpServer, db: D1Database): void {
     {
       title: "채권 검색",
       description:
-        "발행인명·종목명·만기·표면이율·신용등급·발행잔액 조건으로 국내 상장채권을 검색한다. " +
+        "발행인명·종목명·채권종류·만기·표면이율·신용등급·발행잔액·최근 거래 여부로 국내 상장채권을 " +
+        "검색하고 만기/잔액/표면이율/거래량 순으로 정렬한다. " +
         "데이터는 영업일+1일 오후 1시 이후 갱신되며, 신용등급은 KIS(한국신용평가) 기준이다.",
       inputSchema: z.object({
         issuer: z.string().optional().describe("발행인명 부분일치 검색어(예: '한국전력공사')"),
@@ -66,11 +69,32 @@ export function registerBondTools(server: McpServer, db: D1Database): void {
           .max(20)
           .optional()
           .describe("KIS 신용등급 화이트리스트(예: ['AAA', 'AA+'], 최대 20개)"),
+        minGrade: z
+          .enum(GRADE_ORDER)
+          .optional()
+          .describe("KIS 신용등급 하한 — 'AA-'면 AAA~AA-를 모두 포함한다. 무등급 종목은 제외된다"),
+        kind: z
+          .array(z.enum(BOND_KIND_LABELS))
+          .max(BOND_KIND_LABELS.length)
+          .optional()
+          .describe("채권 종류 화이트리스트(예: ['국채'], ['금융채', '일반회사채'])"),
+        tradedSince: z
+          .string()
+          .regex(/^\d{8}$/)
+          .optional()
+          .describe(
+            `이 날짜(${YMD_DESCRIPTION}) 이후 거래 기록이 있는 종목만. ` +
+              "상장 종목 대부분은 거래가 드물어, 최근 활발히 거래된 종목을 찾을 때 sort=volume과 함께 쓴다",
+          ),
         balanceMin: z.number().optional().describe("발행잔액 하한(원, 포함)"),
         sort: z
-          .enum(["exprDt", "bondBal", "coupon"])
+          .enum(["exprDt", "bondBal", "coupon", "volume"])
           .optional()
-          .describe("정렬 기준 — exprDt(만기 임박순, 기본값) / bondBal(잔액 큰 순) / coupon(표면이율 높은 순)"),
+          .describe(
+            "정렬 기준 — exprDt(만기 임박순, 기본값) / bondBal(잔액 큰 순) / coupon(표면이율 높은 순) / " +
+              "volume(거래량 많은 순). volume은 각 종목이 '마지막으로 거래된 날'의 거래량 기준이라 " +
+              "오래전 대량 거래가 상위에 올 수 있다 — tradedSince와 함께 쓸 것",
+          ),
         limit: z
           .number()
           .int()
@@ -80,7 +104,21 @@ export function registerBondTools(server: McpServer, db: D1Database): void {
           .describe(`최대 반환 건수(기본 ${SEARCH_LIMIT_DEFAULT}, 최대 ${SEARCH_LIMIT_MAX})`),
       }),
     },
-    async ({ issuer, name, maturityFrom, maturityTo, couponMin, couponMax, grade, balanceMin, sort, limit }) => {
+    async ({
+      issuer,
+      name,
+      maturityFrom,
+      maturityTo,
+      couponMin,
+      couponMax,
+      grade,
+      minGrade,
+      kind,
+      tradedSince,
+      balanceMin,
+      sort,
+      limit,
+    }) => {
       const filters: BondSearchFilters = {
         issuer,
         name,
@@ -89,12 +127,15 @@ export function registerBondTools(server: McpServer, db: D1Database): void {
         couponMin,
         couponMax,
         grade,
+        minGrade,
+        kind,
+        tradedSince: tradedSince ? Number(tradedSince) : undefined,
         balMin: balanceMin,
         sort,
         limit: limit ?? SEARCH_LIMIT_DEFAULT,
       };
-      const { rows, latestPrices } = await searchBonds(db, filters);
-      const results = toBondSearchResultRows(rows, latestPrices);
+      const { rows, latestPrices, codeLabels } = await searchBonds(db, filters);
+      const results = toBondSearchResultRows(rows, latestPrices, codeLabels);
       return toolJson({ count: results.length, results });
     },
   );
