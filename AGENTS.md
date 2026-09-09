@@ -125,12 +125,16 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 
 `/mcp`(`src/pages/mcp.ts`)가 채권 데이터를 Claude(웹·데스크톱·모바일 앱 공통, claude.ai 계정의 커스텀 커넥터)에 노출하는 MCP(Model Context Protocol) 엔드포인트다. `@modelcontextprotocol/server`(SDK v2, 2026-07-28 스펙)의 `createMcpHandler`로 구현한 **stateless Streamable HTTP** — Durable Object도 세션도 없다. 팩토리(`createBondMcpServer`, `src/lib/mcp/server.ts`)가 요청마다 새 `McpServer` 인스턴스를 만들어 요청 간 상태가 섞이지 않는다.
 
-- **인증 없음**: 이 데이터는 이미 스크리너 화면·`/api/bond/*`로 공개돼 있어 MCP로 새로 노출되는 정보가 없다. 남용 방지는 기존 `BOND_API_LIMITER`(IP당 분당 30회, `checkRateLimit`)만 라우트 레벨에서 건다.
+- **인증 — `MCP_AUTH_TOKEN` 공유 시크릿 하나(OAuth 아님)**: Claude 커스텀 커넥터 추가 화면은 인증 방식을 "없음"으로 두더라도 **"요청 헤더"**(최대 4개, 모든 MCP 요청에 함께 전송되는 API 키류 자격 증명)를 등록할 수 있다 — 거기에 `Authorization: Bearer <token>`을 넣는 것이 이 엔드포인트의 인증 방식이다. 검증은 `src/lib/mcp/auth.ts`의 `authorizeMcpRequest`가 하고, 라우트는 그걸 호출만 한다.
+  - **시크릿이 없으면 503으로 막는다(fail-closed)** — 배포에서 `wrangler secret put`을 빠뜨린 사고가 "인증 없이 공개"로 조용히 남지 않게 한 의도적 선택이다. 로컬은 `.dev.vars`에 `MCP_AUTH_TOKEN="..."`(없으면 `/mcp`가 전부 503), 배포는 `wrangler secret put MCP_AUTH_TOKEN --config ./wrangler.jsonc`를 **배포보다 먼저** 실행할 것.
+  - 헤더 파싱과 401 응답은 직접 만들지 않고 SDK의 `verifyBearerToken`/`bearerAuthChallengeResponse`를 쓴다(`requireBearerAuth`는 Request를 통째로 받아 대체 헤더 정규화를 못 끼워 넣는다). **`verifyBearerToken`은 `AuthInfo.expiresAt`이 없는 토큰을 무조건 거부하므로**(SDK `dist/index.mjs`) 공유 시크릿엔 만료가 없는데도 게이트가 합성 만료를 넣어 준다 — 지우지 말 것.
+  - `Authorization`을 예약어로 막는 클라이언트를 위해 대체 헤더 `x-mcp-token`(접두사 없는 원문 토큰)도 받는다. `Authorization`이 있으면 대체 헤더는 보지 않는다.
+  - 토큰 비교는 SHA-256 다이제스트끼리의 상수시간 XOR 비교다 — workerd의 `crypto.subtle.timingSafeEqual`은 Workers 전용 확장이라 이 저장소 타입 설정의 `SubtleCrypto`에 잡히지 않아(캐스팅 필요) 표준 API만 쓴다. 남용 방지용 `BOND_API_LIMITER`(IP당 분당 30회, `checkRateLimit`)는 인증보다 **먼저** 걸어 토큰 무차별 대입도 같은 한도에 묶는다.
 - **JSON Schema validator를 명시 지정한다.** SDK는 런타임을 감지해 Node는 ajv, workerd/브라우저는 `@cfworker/json-schema`(패키지 자체에 번들돼 있어 별도 설치 불필요)를 자동 선택하지만, Astro/Vite 번들링을 거친 뒤에도 이 감지가 실제 Workers 런타임에서 올바르게 풀리는지는 보장되지 않는다 — ajv는 `new Function`(eval 계열)에 의존해 Workers에서 실패할 수 있다. `src/lib/mcp/server.ts`가 `@modelcontextprotocol/server/validators/cf-worker`의 `CfWorkerJsonSchemaValidator`를 `McpServer` 생성자의 `jsonSchemaValidator` 옵션으로 강제 지정한다 — `tests/workers/mcp-server.test.ts`가 실제 workerd 위에서 이 경로까지 검증한다.
 - **툴 3종**(`src/lib/mcp/tools.ts`): `search_bonds`(발행인/종목명/만기/표면이율/KIS 신용등급/발행잔액 필터 — D1을 직접 쿼리하는 유일한 목록 조회 경로, `src/lib/d1/search-repo.ts`), `get_bond`(ISIN/단축코드 상세 — `detail-repo.ts` 재사용), `get_bond_prices`(시세 시계열 — `price-repo.ts` 재사용). `get_bond`/`get_bond_prices`는 새 로직 없이 `/api/bond/*` 라우트가 쓰는 조회·변환 함수를 그대로 재사용한다. 응답 JSON은 `src/lib/mcp/format.ts`가 조립하는데, HTTP 응답(스냅샷·시계열의 컬럼 지향 배열)을 그대로 내보내지 않고 행 객체로 펴서 LLM이 읽기 좋게 만든다.
 - **`search_bonds`만 D1을 직접 검색한다.** 스크리너 목록 조회(R2 스냅샷)는 D1 read가 0이지만, `search_bonds`는 서버 측 검색이 필요해 새 쿼리를 추가했다(`buildBondSearchQuery`, `src/lib/d1/sql.ts`). 발행인/종목명 LIKE는 `bond` 테이블(2026-09 기준 29,079행) 전체 스캔이다 — 호출 빈도가 사람 대화 수준이라 감내 가능한 트레이드오프로 의도한 것이며, `limit` 상한(50)을 풀지 말 것.
-- 라우트 파일(`src/pages/mcp.ts`)에는 로직을 두지 않는다 — 다른 API 라우트와 같은 이유(workers vitest가 Astro 라우트 파일 자체를 실행할 수 없다, 아래 "테스트" 절 참고)로 라우팅·CORS·rate limit만 담당하고, 툴 정의·D1 조회는 `src/lib/mcp/`·`src/lib/d1/search-repo.ts`에 있다. `tests/workers/mcp-server.test.ts`가 `createMcpHandler(...).fetch(request)`를 라우트 없이 직접 호출해 검증한다 — `responseMode: "auto"`(기본값)가 `tools/call`을 SSE로 응답하는 것을 실측했으므로, 테스트 헬퍼가 일반 JSON과 SSE(`data: {...}` 프레임) 둘 다 파싱한다.
-- 로컬 검증: `pnpm dev` 후 `curl -s -X POST http://localhost:4321/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`, 또는 `npx @modelcontextprotocol/inspector@latest`로 붙여 확인한다.
+- 라우트 파일(`src/pages/mcp.ts`)에는 로직을 두지 않는다 — 다른 API 라우트와 같은 이유(workers vitest가 Astro 라우트 파일 자체를 실행할 수 없다, 아래 "테스트" 절 참고)로 라우팅·CORS·rate limit·인증 게이트 호출만 담당하고, 툴 정의·인증 검증·D1 조회는 `src/lib/mcp/`·`src/lib/d1/search-repo.ts`에 있다. `tests/workers/mcp-server.test.ts`가 `createMcpHandler(...).fetch(request)`를 라우트 없이 직접 호출해 검증한다 — `responseMode: "auto"`(기본값)가 `tools/call`을 SSE로 응답하는 것을 실측했으므로, 테스트 헬퍼가 일반 JSON과 SSE(`data: {...}` 프레임) 둘 다 파싱한다.
+- 로컬 검증: `.dev.vars`에 `MCP_AUTH_TOKEN`을 넣고 `pnpm dev` 후 `curl -s -X POST http://localhost:4321/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -H "authorization: Bearer $MCP_AUTH_TOKEN" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`, 또는 `npx @modelcontextprotocol/inspector@latest`로 붙여 확인한다(Inspector에는 같은 헤더를 등록해야 한다).
 
 ### 디렉터리 구조
 
@@ -154,7 +158,7 @@ src/
     sync/          # cron tick 오케스트레이션, 순수 스케줄링 로직
     r2/            # R2 키 네이밍, 아카이브, 시세 델타 스냅샷
     snapshot/      # 스크리너 목록 스냅샷 v2 포맷·인코드·디코드·병합·cron 빌드(build.ts)·bond 델타(bond-delta.ts) (format.ts/encode.ts/index-file.ts는 @/ 별칭 미사용)
-    mcp/           # MCP 서버 팩토리(server.ts)·툴 3종 정의(tools.ts)·응답 포맷(format.ts)
+    mcp/           # MCP 서버 팩토리(server.ts)·툴 3종 정의(tools.ts)·응답 포맷(format.ts)·공유 시크릿 인증 게이트(auth.ts)
     utils.ts       # 범용 유틸리티 (cn 등)
   pages/
     api/          # 서버 API 라우트 (snapshot 프록시, bond/[id] 상세·시계열 등)
