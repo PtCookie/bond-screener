@@ -38,4 +38,6 @@ pnpm test:e2e                        # Playwright (webServer가 pnpm dev를 자�
 
 ## 실패가 소스 코드 탓이 아닐 때
 
-재실행하면 사라지는 무작위 구문 오류(`Failed to import test file ... SyntaxError`)는 `.claude/worktrees/` 관련 유령 실패다(AGENTS.md "알려진 이슈"). 그 외에는 위 표의 참고 파일에서 해당 프로젝트의 함정 목록을 먼저 확인한다.
+browser 프로젝트에서 파일 여러 개가 한꺼번에 `Failed to import test file ... SyntaxError`로 죽고 재실행하면 사라지면, **실행 로그 맨 위에 `[vite] ... Re-optimizing dependencies` / `[optimizer] bundling dependencies...`가 있는지부터 볼 것.** 있으면 의존성 사전번들 재생성과 테스트 import가 겹친 유령 실패이지 소스 코드 문제가 아니다 — 설정·의존성을 바꾼 뒤 첫 실행(= 커밋 직후 `git push`의 pre-push)에서만 터진다. 상세와 방어 설정(`vitest.browser.config.ts`의 `optimizeDeps`)은 AGENTS.md "알려진 이슈" 참고.
+
+그 외에는 위 표의 참고 파일에서 해당 프로젝트의 함정 목록을 먼저 확인한다.

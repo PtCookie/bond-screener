@@ -12,6 +12,7 @@
 
 ## 함정
 
+- **파일 여러 개가 동시에 `Failed to import test file ... SyntaxError`로 죽으면 소스 탓이 아니다.** Vite가 의존성 사전번들(`node_modules/.vite/vitest/<sha1("browser")>/deps`)을 다시 만드는 동안 브라우저가 테스트 파일을 import하면 그 순간 진행 중이던 파일들만 깨진다. `vitest.browser.config.ts`의 `optimizeDeps.noDiscovery`/`include`가 이를 막고 있으니 지우지 말 것 — 새 런타임 의존성을 쓰는 테스트를 추가하면 `include`에도 추가한다. 배경은 AGENTS.md "알려진 이슈".
 - **`render`/`renderHook`은 async다** — `vitest-browser-react`의 것이며 `await`를 빠뜨리면 `screen.getByText is not a function` 같은 알기 어려운 에러가 난다.
 - **자동 cleanup은 메인 엔트리(`vitest-browser-react`, `/pure` 아님)가 제공한다.** 단 `useScreenerViewState`처럼 `window.history`/`sessionStorage`를 직접 건드리는 훅은 자동 cleanup 대상이 아니라, `tests/setup-browser.ts`의 `afterEach`가 매 테스트 후 원래 URL로 `replaceState`하고 `sessionStorage.clear()`한다(안 하면 훅 테스트끼리 서로의 URL·스토리지를 오염시킨다).
 - **Base UI 팝오버는 Portal로 body 직속에 렌더된다.** 필터 팝오버 텍스트가 표 셀(등급 Badge 등)과 겹쳐 전역 쿼리가 모호해지면 `document.querySelector('[data-slot="popover-content"]')`로 스코프를 좁힐 것(Vitest: `page.elementLocator(...)`, Playwright: `page.locator(...)`).
