@@ -2,7 +2,7 @@
  * `ScreenerSortButton`은 `Header<typeof screenerFeatures, ScreenerRow>`를 받으므로,
  * 실제 컬럼 정의 없이 흉내 낸 객체를 넘기면 타입도 런타임 동작도 어긋난다 — 대신
  * `screenerFeatures`와 같은 제네릭으로 최소 2컬럼(정렬 가능 1 + `enableSorting: false` 1)
- * 짜리 실제 테이블을 만들어 그 헤더를 넘긴다. `screenerColumns`(13컬럼 전부 기본
+ * 짜리 실제 테이블을 만들어 그 헤더를 넘긴다. `screenerColumns`(11컬럼 전부 기본
  * 정렬 가능)에는 정렬 불가 컬럼이 없어 이 테스트만을 위한 별도 컬럼셋을 쓴다.
  */
 import { useState } from "react";

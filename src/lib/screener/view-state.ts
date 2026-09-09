@@ -23,13 +23,11 @@ export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
  */
 const SORTABLE_COLUMN_IDS = new Set<string>([
   "isinCdNm",
-  "bondIsurNm",
   "scrsItmsKcdNm",
   "bondIssuDt",
   "bondExprDt",
   "bondSrfcInrt",
   "kisGrade",
-  "bondBal",
   "bondIntTcdNm",
   "clprPrc",
   "clprVs",
@@ -61,8 +59,6 @@ export function encodeViewState(state: ScreenerViewState): string {
   if (filters.exprDtTo !== null) params.set("exprDtTo", String(filters.exprDtTo));
   if (filters.srfcInrtMin !== null) params.set("srfcInrtMin", String(filters.srfcInrtMin));
   if (filters.srfcInrtMax !== null) params.set("srfcInrtMax", String(filters.srfcInrtMax));
-  if (filters.bondBalMin !== null) params.set("bondBalMin", String(filters.bondBalMin));
-  if (filters.bondBalMax !== null) params.set("bondBalMax", String(filters.bondBalMax));
   if (filters.clprBnfRtMin !== null) params.set("clprBnfRtMin", String(filters.clprBnfRtMin));
   if (filters.clprBnfRtMax !== null) params.set("clprBnfRtMax", String(filters.clprBnfRtMax));
 
@@ -115,8 +111,6 @@ export function decodeViewState(input: string | URLSearchParams): ScreenerViewSt
     exprDtTo: parseNumericParam(params.get("exprDtTo")),
     srfcInrtMin: parseNumericParam(params.get("srfcInrtMin")),
     srfcInrtMax: parseNumericParam(params.get("srfcInrtMax")),
-    bondBalMin: parseNumericParam(params.get("bondBalMin")),
-    bondBalMax: parseNumericParam(params.get("bondBalMax")),
     clprBnfRtMin: parseNumericParam(params.get("clprBnfRtMin")),
     clprBnfRtMax: parseNumericParam(params.get("clprBnfRtMax")),
   };

@@ -79,8 +79,6 @@ describe("round-trip", () => {
         exprDtTo: 20301231,
         srfcInrtMin: 1,
         srfcInrtMax: 5.5,
-        bondBalMin: 0,
-        bondBalMax: 1_000_000_000,
         clprBnfRtMin: 2,
         clprBnfRtMax: 4,
       },

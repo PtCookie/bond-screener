@@ -28,9 +28,6 @@ export interface ScreenerFilters {
   /** 표면이율(%) 범위(inclusive). 0은 유효값 — null과 구분해야 한다. */
   srfcInrtMin: number | null;
   srfcInrtMax: number | null;
-  /** 잔액 범위(inclusive). */
-  bondBalMin: number | null;
-  bondBalMax: number | null;
   /** 수익률(%) 범위(inclusive). */
   clprBnfRtMin: number | null;
   clprBnfRtMax: number | null;
@@ -46,8 +43,6 @@ export const EMPTY_FILTERS: ScreenerFilters = {
   exprDtTo: null,
   srfcInrtMin: null,
   srfcInrtMax: null,
-  bondBalMin: null,
-  bondBalMax: null,
   clprBnfRtMin: null,
   clprBnfRtMax: null,
 };
@@ -77,7 +72,6 @@ export function countActiveFilters(filters: ScreenerFilters): number {
   if (filters.kinds.length > 0) n++;
   if (filters.exprDtFrom !== null || filters.exprDtTo !== null) n++;
   if (filters.srfcInrtMin !== null || filters.srfcInrtMax !== null) n++;
-  if (filters.bondBalMin !== null || filters.bondBalMax !== null) n++;
   if (filters.clprBnfRtMin !== null || filters.clprBnfRtMax !== null) n++;
   return n;
 }
@@ -99,7 +93,6 @@ export function applyFilters(rows: ScreenerRow[], filters: ScreenerFilters): Scr
     if (!inSet(row.scrsItmsKcd, filters.kinds)) return false;
     if (!inRange(row.bondExprDt, filters.exprDtFrom, filters.exprDtTo)) return false;
     if (!inRange(row.bondSrfcInrt, filters.srfcInrtMin, filters.srfcInrtMax)) return false;
-    if (!inRange(row.bondBal, filters.bondBalMin, filters.bondBalMax)) return false;
     if (!inRange(row.clprBnfRt, filters.clprBnfRtMin, filters.clprBnfRtMax)) return false;
     return true;
   });

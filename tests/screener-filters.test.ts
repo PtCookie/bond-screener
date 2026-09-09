@@ -54,8 +54,8 @@ describe("applyFilters", () => {
   });
 
   test("범위 필터가 활성일 때 값이 null인 행은 제외한다", () => {
-    const rows = [makeRow({ isinCd: "A", bondBal: null }), makeRow({ isinCd: "B", bondBal: 1_000_000 })];
-    const result = applyFilters(rows, { ...EMPTY_FILTERS, bondBalMin: 0 });
+    const rows = [makeRow({ isinCd: "A", clprBnfRt: null }), makeRow({ isinCd: "B", clprBnfRt: 3.2 })];
+    const result = applyFilters(rows, { ...EMPTY_FILTERS, clprBnfRtMin: 0 });
     expect(result.map((r) => r.isinCd)).toEqual(["B"]);
   });
 

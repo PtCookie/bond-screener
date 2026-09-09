@@ -74,18 +74,6 @@ export const screenerColumns = helper.columns([
     },
     meta: { width: 16 },
   }),
-  helper.accessor("bondIsurNm", {
-    header: "발행인",
-    cell: (c) => {
-      const v = c.getValue();
-      return (
-        <span className="block truncate" title={v ?? undefined}>
-          {v ?? DASH}
-        </span>
-      );
-    },
-    meta: { width: 10 },
-  }),
   helper.accessor("scrsItmsKcdNm", {
     header: "종류",
     cell: (c) => {
@@ -102,13 +90,13 @@ export const screenerColumns = helper.columns([
     header: "발행일",
     cell: (c) => fmtYmd(c.getValue()),
     sortFn: numericSortFn,
-    meta: { width: 6.5 },
+    meta: { width: 8 },
   }),
   helper.accessor("bondExprDt", {
     header: "만기일",
     cell: (c) => fmtYmd(c.getValue()),
     sortFn: numericSortFn,
-    meta: { width: 6.5 },
+    meta: { width: 8 },
   }),
   helper.accessor("bondSrfcInrt", {
     header: "표면이율",
@@ -124,12 +112,6 @@ export const screenerColumns = helper.columns([
     },
     sortFn: gradeSortFn,
     meta: { width: 6 },
-  }),
-  helper.accessor("bondBal", {
-    header: "잔액",
-    cell: (c) => fmtAmount(c.getValue()),
-    sortFn: numericSortFn,
-    meta: { align: "end", width: 6 },
   }),
   helper.accessor("bondIntTcdNm", {
     header: "이자유형",

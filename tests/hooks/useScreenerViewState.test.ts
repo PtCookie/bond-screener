@@ -124,11 +124,11 @@ describe("상태 변경", () => {
     expect(result.current.state.pageIndex).toBe(2);
 
     await act(() => {
-      result.current.applyFiltersAndSorting({ ...EMPTY_FILTERS, q: "국채" }, [{ id: "bondBal", desc: false }]);
+      result.current.applyFiltersAndSorting({ ...EMPTY_FILTERS, q: "국채" }, [{ id: "bondExprDt", desc: false }]);
     });
 
     expect(result.current.state.filters.q).toBe("국채");
-    expect(result.current.state.sorting).toEqual([{ id: "bondBal", desc: false }]);
+    expect(result.current.state.sorting).toEqual([{ id: "bondExprDt", desc: false }]);
     expect(result.current.state.pageIndex).toBe(0);
     // 중간 상태가 남지 않고 최종 상태 한 벌만 URL에 반영된다.
     expect(window.location.search.replace(/^\?/, "")).toBe(encodeViewState(result.current.state));
