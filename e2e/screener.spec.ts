@@ -127,3 +127,20 @@ test("필터 프리셋 — 이름 붙여 저장하면 리로드 후에도 남고
   await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
   await expect(page).toHaveURL(/q=/);
 });
+
+test("필터별 해제 — 신용등급만 비우고 검색어 필터는 유지된다", async ({ page }) => {
+  await page.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권2");
+  // "유일채권2"/"유일채권20"~"유일채권29" 11건 중 BBB(index 20~29)는 10건이다.
+  await expect(page.getByText("11건 / 전체 30건").first()).toBeVisible();
+
+  const popover = page.locator('[data-slot="popover-content"]');
+  await page.getByRole("button", { name: "신용등급 전체" }).click();
+  await popover.getByText("BBB", { exact: true }).click();
+  await expect(page.getByText("10건 / 전체 30건").first()).toBeVisible();
+
+  await popover.getByRole("button", { name: "신용등급 해제" }).click();
+  // 신용등급만 비었고 검색어는 그대로다 — 필터 바의 "초기화"와 달리 전체를 되돌리지 않는다.
+  await expect(page.getByRole("button", { name: "신용등급 전체" })).toBeVisible();
+  await expect(page.getByText("11건 / 전체 30건").first()).toBeVisible();
+  await expect(page).toHaveURL(/q=/);
+});

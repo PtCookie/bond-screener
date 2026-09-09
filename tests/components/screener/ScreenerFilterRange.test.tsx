@@ -46,4 +46,22 @@ describe("ScreenerFilterRange", () => {
     const screen = await render(<ScreenerFilterRange label="수익률(%)" min={1} max={null} onChange={() => {}} />);
     await expect.element(screen.getByRole("button", { name: "수익률(%)" })).toBeInTheDocument();
   });
+
+  test("팝오버의 해제 버튼은 min/max를 함께 비운다", async () => {
+    const onChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterRange label="만기일" inputType="date" min={20260101} max={20261231} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "만기일" }));
+    await userEvent.click(screen.getByRole("button", { name: "만기일 해제" }));
+
+    expect(onChange).toHaveBeenCalledWith(null, null);
+  });
+
+  test("min/max가 모두 null이면 해제 버튼이 disabled다", async () => {
+    const screen = await render(<ScreenerFilterRange label="수익률(%)" min={null} max={null} onChange={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "수익률(%)" }));
+
+    await expect.element(screen.getByRole("button", { name: "수익률(%) 해제" })).toBeDisabled();
+  });
 });
