@@ -32,6 +32,8 @@ export interface UseScreenerViewStateResult {
   setFilters: (updater: ScreenerFilters | ((prev: ScreenerFilters) => ScreenerFilters)) => void;
   setSorting: (updater: Updater<SortingState>) => void;
   setPagination: (updater: Updater<PaginationState>) => void;
+  /** 필터와 정렬을 한 번에 교체한다(프리셋 적용 경로). */
+  applyFiltersAndSorting: (filters: ScreenerFilters, sorting: SortingState) => void;
   resetFilters: () => void;
 }
 
@@ -115,9 +117,19 @@ export function useScreenerViewState(): UseScreenerViewStateResult {
     [updateState],
   );
 
+  // 프리셋 적용은 필터·정렬을 함께 바꾼다. setFilters → setSorting을 연달아 부르면
+  // sync(history.replaceState + sessionStorage 쓰기)가 두 번 돌면서 "새 필터 + 옛 정렬"인
+  // 중간 상태가 잠깐 URL에 남는다 — 한 번의 updateState로 처리한다.
+  const applyFiltersAndSorting = useCallback(
+    (filters: ScreenerFilters, sorting: SortingState) => {
+      updateState((prev) => ({ ...prev, filters, sorting, pageIndex: 0 }));
+    },
+    [updateState],
+  );
+
   const resetFilters = useCallback(() => {
     setFilters(EMPTY_FILTERS);
   }, [setFilters]);
 
-  return { state, setFilters, setSorting, setPagination, resetFilters };
+  return { state, setFilters, setSorting, setPagination, applyFiltersAndSorting, resetFilters };
 }

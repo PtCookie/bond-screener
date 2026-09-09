@@ -6,6 +6,16 @@ import { EMPTY_FILTERS, type ScreenerFilterOptions, type ScreenerFilters } from 
 
 const EMPTY_OPTIONS: ScreenerFilterOptions = { grades: [], intTcds: [], markets: [], kinds: [] };
 
+// 프리셋 관련 props는 필터 바가 ScreenerPresetMenu로 그대로 넘기기만 한다 —
+// 동작 자체는 ScreenerPresetMenu.test.tsx가 덮으므로 여기서는 자리만 채운다.
+const PRESET_PROPS = {
+  presets: [],
+  presetQuery: "",
+  onSavePreset: () => {},
+  onDeletePreset: () => {},
+  onApplyPreset: () => {},
+};
+
 describe("ScreenerFilterBar", () => {
   test("검색어 입력 시 onFiltersChange 함수형 업데이터가 q만 패치한다", async () => {
     const onFiltersChange = vi.fn();
@@ -13,6 +23,7 @@ describe("ScreenerFilterBar", () => {
       <ScreenerFilterBar
         filters={EMPTY_FILTERS}
         options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
         onFiltersChange={onFiltersChange}
         onReset={() => {}}
         resultCount={10}
@@ -32,6 +43,7 @@ describe("ScreenerFilterBar", () => {
       <ScreenerFilterBar
         filters={EMPTY_FILTERS}
         options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
         onFiltersChange={() => {}}
         onReset={() => {}}
         resultCount={10}
@@ -47,6 +59,7 @@ describe("ScreenerFilterBar", () => {
       <ScreenerFilterBar
         filters={{ ...EMPTY_FILTERS, q: "삼성" }}
         options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
         onFiltersChange={() => {}}
         onReset={onReset}
         resultCount={3}
@@ -64,6 +77,7 @@ describe("ScreenerFilterBar", () => {
       <ScreenerFilterBar
         filters={EMPTY_FILTERS}
         options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
         onFiltersChange={() => {}}
         onReset={() => {}}
         resultCount={10}
@@ -78,6 +92,7 @@ describe("ScreenerFilterBar", () => {
       <ScreenerFilterBar
         filters={{ ...EMPTY_FILTERS, q: "a" }}
         options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
         onFiltersChange={() => {}}
         onReset={() => {}}
         resultCount={3}
@@ -93,6 +108,7 @@ describe("ScreenerFilterBar", () => {
       <ScreenerFilterBar
         filters={{ ...EMPTY_FILTERS, bondBalMin: 1_000_000_000_000, bondBalMax: null }} // 1e12원 = 10,000억
         options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
         onFiltersChange={onFiltersChange}
         onReset={() => {}}
         resultCount={10}

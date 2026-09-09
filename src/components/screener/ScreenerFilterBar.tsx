@@ -3,8 +3,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { countActiveFilters, type ScreenerFilterOptions, type ScreenerFilters } from "@/lib/screener/filters";
+import type { FilterPreset } from "@/lib/screener/presets";
 import { ScreenerFilterMultiSelect } from "./ScreenerFilterMultiSelect";
 import { ScreenerFilterRange } from "./ScreenerFilterRange";
+import { ScreenerPresetMenu } from "./ScreenerPresetMenu";
 
 /** `bondBal`은 원 단위로 저장돼 있다 — 필터 입력은 억 단위가 자연스러워 여기서만 환산한다. */
 const WON_PER_EOK = 1e8;
@@ -14,6 +16,12 @@ interface ScreenerFilterBarProps {
   options: ScreenerFilterOptions;
   onFiltersChange: (updater: ScreenerFilters | ((prev: ScreenerFilters) => ScreenerFilters)) => void;
   onReset: () => void;
+  /** 필터 바는 정렬 상태를 모른다 — 프리셋 관련 값은 받아서 그대로 넘기기만 한다. */
+  presets: FilterPreset[];
+  presetQuery: string;
+  onSavePreset: (name: string, query: string) => void;
+  onDeletePreset: (id: string) => void;
+  onApplyPreset: (query: string) => void;
   resultCount: number;
   totalCount: number;
 }
@@ -23,6 +31,11 @@ export function ScreenerFilterBar({
   options,
   onFiltersChange,
   onReset,
+  presets,
+  presetQuery,
+  onSavePreset,
+  onDeletePreset,
+  onApplyPreset,
   resultCount,
   totalCount,
 }: ScreenerFilterBarProps) {
@@ -105,6 +118,14 @@ export function ScreenerFilterBar({
       <Button variant="ghost" size="sm" disabled={activeCount === 0} onClick={onReset}>
         초기화
       </Button>
+
+      <ScreenerPresetMenu
+        presets={presets}
+        currentQuery={presetQuery}
+        onSave={onSavePreset}
+        onDelete={onDeletePreset}
+        onApply={onApplyPreset}
+      />
 
       <Badge variant="outline" className="text-muted-foreground ml-auto">
         {resultCount === totalCount
