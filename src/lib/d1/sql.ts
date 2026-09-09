@@ -9,6 +9,7 @@
  * SQL은 모듈 로드 시 한 번만 문자열로 조립되고 이후 상수로 재사용된다.
  */
 import { BOND_COLUMNS, BOND_PRICE_COLUMNS, BOND_STATE_COLUMNS, CODE_LABEL_COLUMNS } from "@/lib/bond/columns";
+import { gradesAtOrAbove, type Grade } from "@/lib/bond/grade";
 
 function jsonEachExtracts(count: number): string {
   return Array.from({ length: count }, (_, i) => `json_extract(value, '$[${i}]')`).join(", ");
@@ -243,14 +244,55 @@ export interface BondSearchFilters {
    * 만들어 그대로 바인딩하므로, 다른 필터와 조합될 경우 D1 쿼리당 bound parameter
    * 100개 제한에 걸릴 수 있다 — 이 함수는 개수를 스스로 방어하지 않고 호출부의
    * 입력 검증(현재 유일한 호출부인 `src/lib/mcp/tools.ts`의 zod `max(20)`)에 의존한다.
+   * 최악 조합(`grade` 20 + `minGrade` 20 + `kind` 10 + 스칼라 필터 6 + limit 1 = 57)도
+   * 100개 안이다.
    */
   grade?: readonly string[];
+  /**
+   * KIS 신용등급 하한 — `gradesAtOrAbove`(`src/lib/bond/grade.ts`)로 "이상"에 해당하는
+   * 등급 목록으로 펼쳐 `IN (...)`으로 건다(SQL에서 문자열 등급을 부등호로 못 비교한다).
+   * `kis_grade`가 NULL인 무등급 종목은 자연히 제외된다 — 의도된 동작이다.
+   * `grade`와 함께 오면 두 `IN`이 `AND`로 묶여 교집합이 된다.
+   */
+  minGrade?: string;
+  /**
+   * 채권 종류(`bond.scrs_itms_kcd`) 화이트리스트. **코드가 아니라 한글 라벨**을 받아
+   * `code_label` 서브쿼리로 코드를 해석한다 — 코드↔라벨 맵을 소스에 이중 관리하지 않기
+   * 위함이며, 라벨이 바뀌어도 잘못된 코드에 매칭되지 않고 0건이 될 뿐이다.
+   * 선택지는 `BOND_KIND_LABELS`(`src/lib/bond/columns.ts`) 참고.
+   */
+  kind?: readonly string[];
+  /** 이 basDt(YYYYMMDD) 이후 거래 기록이 있는 종목만. `sort: "volume"`의 짝이다. */
+  tradedSince?: number;
   /** 발행잔액 하한(포함). */
   balMin?: number;
   /** 정렬 기준 — 생략 시 `exprDt`(만기 임박순). */
-  sort?: "exprDt" | "bondBal" | "coupon";
+  sort?: "exprDt" | "bondBal" | "coupon" | "volume";
   limit: number;
 }
+
+/**
+ * "그 종목이 마지막으로 거래된 날"의 거래량을 내는 상관 서브쿼리. `sort: "volume"`과
+ * `tradedSince`가 공유하는 조회 형태라 한곳에 모아 둔다.
+ *
+ * `bond_price` PK가 `(isin_cd, bas_dt, mrkt_ctg) WITHOUT ROWID`라 안쪽 `MAX(bas_dt)`는
+ * 역방향 PK 시크 1행, 바깥은 `(isin_cd, bas_dt)` 접두사 시크 1~2행으로 끝난다 —
+ * `EXPLAIN QUERY PLAN` 실측으로 `SEARCH p USING PRIMARY KEY (isin_cd=? AND bas_dt=?)` /
+ * `SEARCH p2 USING PRIMARY KEY (isin_cd=?)`만 나오는 것을 확인했다(로컬 29,079종목 ~290ms).
+ *
+ * **`(SELECT p.trqu ... ORDER BY p.bas_dt DESC, p.mrkt_ctg ASC LIMIT 1)`로 쓰지 말 것** —
+ * 결과는 같지만 정렬 방향이 섞여 종목마다 `USE TEMP B-TREE FOR LAST TERM OF ORDER BY`가
+ * 붙고, 그러면 그 종목의 시세 전량을 읽어 사실상 `bond_price` 560k행 스캔이 된다(실측).
+ *
+ * 같은 최신 `bas_dt`에 KTS·일반채권 두 행이 동시에 있을 수 있어 `mrkt_ctg` 오름차순 1행만
+ * 취한다 — `BOND_SEARCH_LATEST_PRICE_SQL` + `toBondSearchResultRows`가 응답에 실을 시세를
+ * 고르는 규칙(KTS 우선)과 같은 행이라, 정렬 순서와 응답의 `latestPrice.volume`이 일치한다.
+ */
+const LATEST_TRQU_SUBQUERY =
+  `(SELECT p.trqu FROM bond_price p\n` +
+  `   WHERE p.isin_cd = b.isin_cd\n` +
+  `     AND p.bas_dt = (SELECT MAX(p2.bas_dt) FROM bond_price p2 WHERE p2.isin_cd = b.isin_cd)\n` +
+  `   ORDER BY p.mrkt_ctg LIMIT 1)`;
 
 /**
  * 정렬 기준별 ORDER BY 절. SQLite 네이티브 `NULLS LAST`를 쓴다(`IS NULL, col` 관용구
@@ -261,11 +303,17 @@ export interface BondSearchFilters {
  * 사라진다("SCAN b USING INDEX idx_bond_expr_dt" 하나로 끝). `bondBal`/`coupon`은
  * 대상 컬럼에 인덱스가 없어(AGENTS.md — MCP 검색을 위해 새 인덱스를 추가하지
  * 않기로 함) 어느 표현이든 temp B-tree 정렬이 필요하지만, 표현을 통일해 둔다.
+ *
+ * `volume`은 정렬 대상(`trqu`)이 `bond_price`에 있어 상관 서브쿼리를 쓴다
+ * (`LATEST_TRQU_SUBQUERY` 주석 참고). 이 표현은 `sort: "volume"`일 때만 SQL에 들어간다 —
+ * 무조건 넣으면 기본 정렬 경로의 EQP 회귀 테스트(`tests/workers/search-repo.test.ts`)가
+ * 요구하는 "TEMP B-TREE 없음"이 깨진다.
  */
 const BOND_SEARCH_ORDER_CLAUSES: Record<NonNullable<BondSearchFilters["sort"]>, string> = {
   exprDt: "b.bond_expr_dt ASC NULLS LAST",
   bondBal: "s.bond_bal DESC NULLS LAST",
   coupon: "b.bond_srfc_inrt DESC NULLS LAST",
+  volume: `${LATEST_TRQU_SUBQUERY} DESC NULLS LAST`,
 };
 
 /** `searchBonds`(`src/lib/d1/search-repo.ts`)의 결과 컬럼 — `BondSearchRow`와 순서가 대응한다. */
@@ -277,6 +325,7 @@ export const BOND_SEARCH_SELECT_COLUMNS = [
   "b.bond_expr_dt",
   "b.bond_srfc_inrt",
   "b.bond_int_tcd",
+  "b.scrs_itms_kcd",
   "s.bond_bal",
   "s.kis_grade",
 ] as const;
@@ -313,6 +362,22 @@ export function buildBondSearchQuery(filters: BondSearchFilters): { sql: string;
   if (filters.grade && filters.grade.length > 0) {
     where.push(`s.kis_grade IN (${filters.grade.map(() => "?").join(", ")})`);
     binds.push(...filters.grade);
+  }
+  if (filters.minGrade !== undefined) {
+    const grades = gradesAtOrAbove(filters.minGrade as Grade);
+    where.push(`s.kis_grade IN (${grades.map(() => "?").join(", ")})`);
+    binds.push(...grades);
+  }
+  if (filters.kind && filters.kind.length > 0) {
+    where.push(
+      `b.scrs_itms_kcd IN (SELECT code FROM code_label WHERE domain = 'scrsItmsKcd' ` +
+        `AND label IN (${filters.kind.map(() => "?").join(", ")}))`,
+    );
+    binds.push(...filters.kind);
+  }
+  if (filters.tradedSince !== undefined) {
+    where.push("(SELECT MAX(p.bas_dt) FROM bond_price p WHERE p.isin_cd = b.isin_cd) >= ?");
+    binds.push(filters.tradedSince);
   }
   if (filters.balMin !== undefined) {
     where.push("s.bond_bal >= ?");

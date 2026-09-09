@@ -165,3 +165,30 @@ export const CODE_LABEL_DOMAINS: Readonly<Record<string, string>> = {
   sttr_hldy_int_pydy_dcd: "sttrHldyIntPydyDcd",
   int_pay_mmnt_dcd: "intPayMmntDcd",
 };
+
+/**
+ * 채권 종류(`bond.scrs_itms_kcd`)의 한글 라벨 목록. **정본은 D1의
+ * `code_label(domain='scrsItmsKcd')`이고 이 배열은 MCP 입력 스키마(zod `z.enum`)에
+ * 선택지를 노출하기 위한 사본이다** — 실제 코드 해석은 `buildBondSearchQuery`
+ * (`src/lib/d1/sql.ts`)가 `code_label` 서브쿼리로 하므로 여기에 코드는 두지 않는다
+ * (코드↔라벨 맵을 소스에 이중 관리하지 않기 위함).
+ *
+ * 재도출:
+ *   wrangler d1 execute bond-screener --local --config ./wrangler.jsonc \
+ *     --command "SELECT code, label FROM code_label WHERE domain='scrsItmsKcd' ORDER BY code"
+ * 2026-09 실측 기준 10종(1101 국채 / 1102 지방채 / 1103 특수채 / 1104 지방공사채 /
+ * 1105 금융채 / 1106 유동화SPC채 / 1107 유사집합투자기구채 / 1108 일반회사채 /
+ * 3201 MBS / 3202 SLBS).
+ */
+export const BOND_KIND_LABELS = [
+  "국채",
+  "지방채",
+  "특수채",
+  "지방공사채",
+  "금융채",
+  "유동화SPC채",
+  "유사집합투자기구채",
+  "일반회사채",
+  "MBS",
+  "SLBS",
+] as const;
