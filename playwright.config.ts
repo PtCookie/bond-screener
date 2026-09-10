@@ -8,10 +8,11 @@ import { defineConfig, devices } from "@playwright/test";
  * 전체 페이지 리로드를 거치는 상태 지속성 등 컴포넌트 테스트로 재현할 수 없는 것만 본다.
  * 그래서 기본 프로젝트는 데스크톱 chromium 1종 + 모바일 1종으로 좁힌다.
  *
- * `/api/snapshot/*`는 각 스펙이 page.route()로 모킹한다(e2e/fixtures/snapshot.ts) —
- * pnpm seed:local(.backfill/ 319MB, 오픈API 재수집 필요) 없이도 결정론적으로 돈다.
- * 상세 페이지(/bond/[id])는 SSR이 D1을 직접 타므로 이 모킹 대상이 아니다 — E2E에서는
- * 라우팅 전이(URL이 바뀌는 것)까지만 검증하고 응답 내용은 단언하지 않는다.
+ * 데이터는 두 갈래다. 목록 화면이 쓰는 `/api/snapshot/*`는 각 스펙이 page.route()로
+ * 모킹하고(e2e/fixtures/snapshot.ts), SSR이 D1을 직접 타 모킹이 닿지 않는 상세
+ * 페이지(/bond/[id])는 `scripts/seed-e2e.mjs`가 E2E 전용 persist 경로에 심는 픽스처
+ * 종목으로 검증한다 — 둘 다 pnpm seed:local(.backfill/ 319MB, 오픈API 재수집 필요)
+ * 없이 결정론적으로 돈다.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -38,7 +39,11 @@ export default defineConfig({
     // 백그라운드 전환을 "Process from config.webServer exited early"로 오인해 실패한다.
     // CLAUDECODE를 빈 문자열로 지워(`checkEnvVar`가 Boolean() 판정이라 빈 문자열은
     // falsy) 감지를 끄면 정상적인 포그라운드 프로세스로 뜬다.
-    env: { CLAUDECODE: "" },
+    // E2E_PERSIST_PATH: astro.config.mjs가 이 값을 어댑터의 persistState로 넘겨 dev 서버가
+    // 개발용 실데이터 D1(.wrangler/state) 대신 E2E 픽스처 DB를 보게 한다. 이 경로에 스키마와
+    // 픽스처를 심는 것은 scripts/seed-e2e.mjs이고, 그 스크립트는 playwright가 webServer를
+    // 띄우기 전에 끝나 있어야 한다(package.json의 test:e2e 참고).
+    env: { CLAUDECODE: "", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
   },
 
   projects: [

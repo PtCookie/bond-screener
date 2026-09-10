@@ -9,6 +9,13 @@ import { env } from "node:process";
 // Workaround for Vitest
 const isVitest = !!env.VITEST;
 
+// Playwright E2E는 개발용 실데이터 D1(`.wrangler/state`, `pnpm seed:local`)을 건드리지 않도록
+// 별도 persist 경로를 쓴다. `playwright.config.ts`의 webServer.env가 이 값을 넘기고,
+// `scripts/seed-e2e.mjs`가 wrangler `--persist-to`로 같은 경로에 픽스처를 심는다
+// (`@cloudflare/vite-plugin`의 persistState와 wrangler의 --persist-to가 똑같이 `<path>/v3`를
+// 쓴다 — 양쪽 dist 실측). 값이 없으면 어댑터 기본값(`.wrangler/state`) 그대로다.
+const e2ePersistPath = env.E2E_PERSIST_PATH;
+
 // https://astro.build/config
 export default defineConfig({
   output: "server",
@@ -36,5 +43,5 @@ export default defineConfig({
     },
   },
 
-  adapter: isVitest ? undefined : cloudflare(),
+  adapter: isVitest ? undefined : cloudflare(e2ePersistPath ? { persistState: { path: e2ePersistPath } } : {}),
 });

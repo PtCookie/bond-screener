@@ -10,6 +10,10 @@
  * 타입만 `import type`으로 가져온다 — 타입 전용 import는 완전히 소거되므로, 그 모듈이
  * 내부적으로 `@/` 별칭을 쓰더라도(`src/lib/r2/price-delta.ts`) 런타임에 실제로 로드되지
  * 않아 별칭 해석 문제와 무관하다.
+ *
+ * 상세 페이지(`/bond/[id]`)는 SSR이 D1을 직접 타 이 모킹이 닿지 않는다 — 짝이 되는 D1
+ * 픽스처가 `./detail.sql`에 있고, `makeBonds()`의 **첫 종목과 정체성(ISIN·종목명·발행인)이
+ * 일치**해야 한다(`navigation.spec.ts`가 목록에서 클릭해 들어간 상세를 그 값으로 단언한다).
  */
 import type { Page } from "@playwright/test";
 import { encodeSnapshot, type EncodeSnapshotInput } from "../../src/lib/snapshot/encode";
