@@ -26,6 +26,25 @@ interface ScreenerTableProps {
  */
 const STICKY_FIRST_COL = "group-hover/row:bg-row-hover sticky left-0 z-10 bg-background transition-colors";
 
+/**
+ * 컬럼 헤더를 상단 sticky로 고정한다. `position: sticky`는 overflow가 visible이 아닌 가장 가까운
+ * 조상을 기준으로 동작하는데, `Table`의 가로 스크롤 wrapper(`table-container`, overflow-x-auto)가
+ * 이미 그 조건에 해당한다(CSS 스펙상 overflow-x가 visible이 아니면 overflow-y도 auto로 강제되어,
+ * 실제로 세로 스크롤이 없어도 이 wrapper가 sticky의 기준 컨테이너가 돼버린다 — 실측 확인: 이
+ * wrapper의 overflow를 걷어내지 않는 한 페이지(window) 스크롤에는 결코 반응하지 않는다).
+ * 그래서 페이지 전체가 아니라 "이 테이블 자체"가 스크롤되도록 TABLE_MAX_HEIGHT_CLASS로 세로
+ * 스크롤 상한을 주고, 헤더는 그 스크롤 기준(table-container)에 상대적인 top-0/top-12로 고정한다.
+ * z-20은 STICKY_FIRST_COL(z-10)보다 위에 둬 스크롤 중 헤더 밑을 지나가는 본문 sticky 1열 셀에
+ * 헤더가 가려지지 않게 한다.
+ */
+const STICKY_HEADER = "sticky top-0 z-20 bg-background";
+
+/** 모바일 헤더 2행(데이터 컬럼)의 sticky top — 1행(종목명, h-12=3rem) 바로 아래에 붙인다. */
+const STICKY_HEADER_ROW2 = "sticky top-12 z-20 bg-background";
+
+/** 표시 개수를 늘려도 헤더/필터가 가려지지 않도록 테이블 자체에 세로 스크롤 상한을 둔다. */
+const TABLE_MAX_HEIGHT_CLASS = "max-h-[70vh]";
+
 /** 모바일에서 sticky 종목명이 뚫고 나갈 수 있는 최대 폭 — 페이지 좌우 padding(px-4 × 2 = 2rem) + 여유. */
 const MOBILE_NAME_MAX_WIDTH = "max-w-[calc(100vw-3rem)]";
 
@@ -49,7 +68,7 @@ function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: Screen
   const minWidth = sumColWidths(headers.map((h) => h.column.columnDef.meta?.width));
 
   return (
-    <Table className="table-fixed" style={{ minWidth: `${minWidth}rem` }}>
+    <Table className="table-fixed" containerClassName={TABLE_MAX_HEIGHT_CLASS} style={{ minWidth: `${minWidth}rem` }}>
       <colgroup>
         {headers.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -63,6 +82,7 @@ function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: Screen
                 key={header.id}
                 className={cn(
                   idx === 0 && STICKY_FIRST_COL,
+                  STICKY_HEADER,
                   header.column.columnDef.meta?.align === "end" && "text-right",
                   header.column.columnDef.meta?.groupStart && "border-l",
                 )}
@@ -104,7 +124,7 @@ function MobileTable({ table, rows }: { table: ScreenerReactTable; rows: Screene
   const minWidth = sumColWidths(dataHeaders.map((h) => h.column.columnDef.meta?.width));
 
   return (
-    <Table className="table-fixed" style={{ minWidth: `${minWidth}rem` }}>
+    <Table className="table-fixed" containerClassName={TABLE_MAX_HEIGHT_CLASS} style={{ minWidth: `${minWidth}rem` }}>
       <colgroup>
         {dataHeaders.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -112,7 +132,7 @@ function MobileTable({ table, rows }: { table: ScreenerReactTable; rows: Screene
       </colgroup>
       <TableHeader>
         <TableRow>
-          <TableHead colSpan={dataColCount}>
+          <TableHead colSpan={dataColCount} className={STICKY_HEADER}>
             {nameHeader && (
               <div className={cn("sticky left-0", MOBILE_NAME_MAX_WIDTH)}>
                 <ScreenerSortButton header={nameHeader} />
@@ -125,6 +145,7 @@ function MobileTable({ table, rows }: { table: ScreenerReactTable; rows: Screene
             <TableHead
               key={header.id}
               className={cn(
+                STICKY_HEADER_ROW2,
                 header.column.columnDef.meta?.align === "end" && "text-right",
                 header.column.columnDef.meta?.groupStart && "border-l",
               )}

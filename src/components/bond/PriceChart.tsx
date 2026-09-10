@@ -121,7 +121,7 @@ export function PriceChart({ points, metric }: PriceChartProps) {
   }, [points, metric]);
 
   return (
-    <div className="relative h-[360px] w-full">
+    <div className="relative h-90 w-full">
       <div ref={containerRef} className="h-full w-full" />
       {points.length === 0 && (
         <div className="text-muted-foreground absolute inset-0 flex items-center justify-center text-sm">
