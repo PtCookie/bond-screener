@@ -39,7 +39,7 @@ const isinCdNm = (detail.bond.isinCdNm as string | null) ?? isinCd;
 ---
 
 <Layout title={`${isinCdNm} | 채권 스크리너`}>
-  <main class="mx-auto max-w-[1400px] px-4 py-6">
+  <main class="mx-auto max-w-350 px-4 py-6">
     <BondDetail detail={detail} client:load />
   </main>
 </Layout>

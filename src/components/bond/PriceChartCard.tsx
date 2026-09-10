@@ -99,11 +99,11 @@ export function PriceChartCard({ isinCd, markets }: PriceChartCardProps) {
         </div>
 
         {isError ? (
-          <div className="text-destructive flex h-[360px] items-center justify-center text-sm">
+          <div className="text-destructive flex h-90 items-center justify-center text-sm">
             {error instanceof Error ? error.message : String(error)}
           </div>
         ) : isPending ? (
-          <Skeleton className="h-[360px] w-full" />
+          <Skeleton className="h-90 w-full" />
         ) : (
           <PriceChart points={points} metric={metric} />
         )}
