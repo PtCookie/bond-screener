@@ -107,13 +107,13 @@ describe("동명 덮어쓰기", () => {
 
     // 대소문자·공백을 무시한 동명 판정을 함께 확인한다.
     await popover().getByLabelText("프리셋 이름").fill(" 고금리 ");
-    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기" }));
+    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기", exact: true }));
 
     // 확인 단계 — 아직 저장되지 않았다.
     expect(onSave).not.toHaveBeenCalled();
     await expect.element(popover().getByText("“고금리” 프리셋을 덮어쓸까요?")).toBeInTheDocument();
 
-    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기" }));
+    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기", exact: true }));
     expect(onSave).toHaveBeenCalledExactlyOnceWith("고금리", "q=현재");
   });
 
@@ -123,10 +123,36 @@ describe("동명 덮어쓰기", () => {
     await openMenu(screen);
 
     await popover().getByLabelText("프리셋 이름").fill("고금리");
-    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기" }));
+    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기", exact: true }));
     await userEvent.click(popover().getByRole("button", { name: "취소" }));
 
     expect(onSave).not.toHaveBeenCalled();
     await expect.element(popover().getByLabelText("프리셋 이름")).toHaveValue("고금리");
+  });
+
+  test("목록의 덮어쓰기 버튼을 누르면 재타이핑 없이 확인 후 그 이름 그대로 onSave가 호출된다", async () => {
+    const onSave = vi.fn();
+    const screen = await renderMenu({ onSave });
+    await openMenu(screen);
+
+    await userEvent.click(popover().getByRole("button", { name: "고금리 덮어쓰기" }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    await expect.element(popover().getByText("“고금리” 프리셋을 덮어쓸까요?")).toBeInTheDocument();
+
+    await userEvent.click(popover().getByRole("button", { name: "덮어쓰기", exact: true }));
+    expect(onSave).toHaveBeenCalledExactlyOnceWith("고금리", "q=현재");
+  });
+
+  test("목록에서 시작한 덮어쓰기를 취소하면 저장하지 않고 입력 폼으로 돌아온다", async () => {
+    const onSave = vi.fn();
+    const screen = await renderMenu({ onSave });
+    await openMenu(screen);
+
+    await userEvent.click(popover().getByRole("button", { name: "고금리 덮어쓰기" }));
+    await userEvent.click(popover().getByRole("button", { name: "취소" }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    await expect.element(popover().getByLabelText("프리셋 이름")).toHaveValue("");
   });
 });
