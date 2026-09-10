@@ -71,19 +71,23 @@ function BondScreenerInner() {
         filteredCount={filteredRows.length}
         totalCount={rows.length}
       />
-      <ScreenerFilterBar
-        filters={state.filters}
-        options={filterOptions}
-        onFiltersChange={setFilters}
-        onReset={resetFilters}
-        presets={presets}
-        presetQuery={presetQuery}
-        onSavePreset={savePreset}
-        onDeletePreset={deletePreset}
-        onApplyPreset={applyPreset}
-        resultCount={filteredRows.length}
-        totalCount={rows.length}
-      />
+      {/* 표시 개수를 늘려 스크롤이 길어져도 적용된 필터가 계속 보이도록 sticky 고정.
+          z-30: 아래 테이블 헤더(z-20)보다 위, 팝오버(z-50)보다는 아래. */}
+      <div className="bg-background sticky top-0 z-30 py-2">
+        <ScreenerFilterBar
+          filters={state.filters}
+          options={filterOptions}
+          onFiltersChange={setFilters}
+          onReset={resetFilters}
+          presets={presets}
+          presetQuery={presetQuery}
+          onSavePreset={savePreset}
+          onDeletePreset={deletePreset}
+          onApplyPreset={applyPreset}
+          resultCount={filteredRows.length}
+          totalCount={rows.length}
+        />
+      </div>
       {isError ? (
         <div className="overflow-hidden rounded-lg border">
           <ScreenerError

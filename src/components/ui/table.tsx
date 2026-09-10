@@ -2,9 +2,15 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+interface TableProps extends React.ComponentProps<"table"> {
+  /** 가로 스크롤 wrapper(`table-container`)에 붙는 클래스 — 예: 세로 스크롤 상한(max-height)을
+   * 줘서 컬럼 헤더의 sticky top이 실제로 스크롤되는 이 컨테이너를 기준으로 동작하게 만들 때 쓴다. */
+  containerClassName?: string;
+}
+
+function Table({ className, containerClassName, ...props }: TableProps) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div data-slot="table-container" className={cn("relative w-full overflow-x-auto", containerClassName)}>
       <table data-slot="table" className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );
