@@ -4,11 +4,13 @@
       {
         "hooks": [
           {
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/remind-generate-types.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/sync-worker-types.sh\"",
+            "statusMessage": "worker-configuration.d.ts 갱신 확인 중...",
+            "timeout": 120,
             "type": "command"
           }
         ],
-        "matcher": "Edit|Write"
+        "matcher": "Edit|Write|Bash"
       }
     ],
     "PreToolUse": [
