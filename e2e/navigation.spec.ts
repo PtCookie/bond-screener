@@ -29,6 +29,10 @@ test.describe("목록 → 상세 이동", () => {
   });
 
   test("행 클릭 시 상세 페이지로 이동한다", async ({ page }) => {
+    // 실제 행이 뜬 뒤에 클릭한다. 로딩 중 <tbody>에는 스켈레톤 <tr>이 들어 있는데,
+    // 그것도 보이고 안정적이라 Playwright의 actionability를 통과해 버린다 — onClick이
+    // 없어 클릭이 허공에 떨어지고 아래 waitForURL이 타임아웃된다(간헐적 flake).
+    await expect(page.getByText(FIXTURE.isinCdNm)).toBeVisible();
     await page.locator("tbody tr").first().click();
     await page.waitForURL(`**/bond/${FIXTURE.isinCd}`);
     await expectDetailOf(page);

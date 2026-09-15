@@ -2,8 +2,10 @@ import { MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { countActiveFilters, type ScreenerFilterOptions, type ScreenerFilters } from "@/lib/screener/filters";
 import type { FilterPreset } from "@/lib/screener/presets";
+import type { ScreenerStatus } from "@/lib/screener/types";
 import { ScreenerFilterMultiSelect } from "./ScreenerFilterMultiSelect";
 import { ScreenerFilterRange } from "./ScreenerFilterRange";
 import { ScreenerPresetMenu } from "./ScreenerPresetMenu";
@@ -21,6 +23,11 @@ interface ScreenerFilterBarProps {
   onApplyPreset: (query: string) => void;
   resultCount: number;
   totalCount: number;
+  /**
+   * 기본값 `"ready"` — 넘기지 않으면 지금까지와 똑같이 동작한다. 로딩 중에는 결과 건수를
+   * 숫자로 그리지 않는다(0이 "진짜 0건"과 구분되지 않는다). `ScreenerHeader`와 같은 규약.
+   */
+  status?: ScreenerStatus;
 }
 
 export function ScreenerFilterBar({
@@ -35,6 +42,7 @@ export function ScreenerFilterBar({
   onApplyPreset,
   resultCount,
   totalCount,
+  status = "ready",
 }: ScreenerFilterBarProps) {
   const activeCount = countActiveFilters(filters);
 
@@ -113,11 +121,17 @@ export function ScreenerFilterBar({
         onApply={onApplyPreset}
       />
 
-      <Badge variant="outline" className="text-muted-foreground ml-auto">
-        {resultCount === totalCount
-          ? `${resultCount.toLocaleString("ko-KR")}건`
-          : `${resultCount.toLocaleString("ko-KR")}건 / 전체 ${totalCount.toLocaleString("ko-KR")}건`}
-      </Badge>
+      {/* h-5·rounded-3xl은 badgeVariants의 실제 값이고, ml-auto는 대체 요소에도 반드시
+          남아야 우측 정렬이 무너지지 않는다. */}
+      {status === "loading" ? (
+        <Skeleton className="ml-auto h-5 w-14 rounded-3xl" aria-hidden="true" />
+      ) : status === "ready" ? (
+        <Badge variant="outline" className="text-muted-foreground ml-auto">
+          {resultCount === totalCount
+            ? `${resultCount.toLocaleString("ko-KR")}건`
+            : `${resultCount.toLocaleString("ko-KR")}건 / 전체 ${totalCount.toLocaleString("ko-KR")}건`}
+        </Badge>
+      ) : null}
     </div>
   );
 }

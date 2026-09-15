@@ -73,6 +73,36 @@ export async function mockSnapshot(page: Page, bonds: MockBond[]): Promise<void>
   await page.route(`**/api/snapshot/bond/${payload.basDt}`, (route) => route.fulfill({ json: payload }));
 }
 
+/**
+ * `mockSnapshot`과 같은 응답을 주되, **테스트가 `release()`를 부를 때까지 붙잡아 둔다** —
+ * 로딩 프레임을 결정론적으로 열어 두고 단언하기 위함이다.
+ *
+ * 고정 `delayMs` sleep을 쓰지 않는 이유: 짧으면 CI에서 로딩이 이미 끝나 flaky하고, 넉넉히
+ * 잡으면 스위트 벽시계 시간이 그만큼 늘어난다. 게이트 방식은 둘 다 피한다.
+ */
+export async function mockSnapshotDeferred(page: Page, bonds: MockBond[]): Promise<{ release: () => void }> {
+  const payload = buildPayload(bonds);
+  const index: SnapshotIndex = {
+    generatedAt: new Date(0).toISOString(),
+    bond: { key: `snapshot/bond/${payload.basDt}.json`, basDt: payload.basDt, count: bonds.length },
+    bondDeltas: [],
+    priceDeltas: [],
+  };
+
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await page.route("**/api/snapshot/index", async (route) => {
+    await gate;
+    await route.fulfill({ json: index });
+  });
+  await page.route(`**/api/snapshot/bond/${payload.basDt}`, (route) => route.fulfill({ json: payload }));
+
+  return { release };
+}
+
 /** `/api/snapshot/index` 요청 자체를 실패시킨다 — 에러 화면 검증용. */
 export async function mockSnapshotFailure(page: Page, status = 500): Promise<void> {
   await page.route("**/api/snapshot/index", (route) => route.fulfill({ status, body: "" }));

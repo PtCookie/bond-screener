@@ -27,7 +27,9 @@
 ## 셀렉터·타이밍 함정
 
 - **`ScreenerFilterRange` 트리거(예: "만기일", "표면이율")는 같은 이름의 표 헤더 정렬 버튼과 접근성 이름이 충돌한다**(다중선택 트리거는 "라벨 전체/개수" 접미사가 붙어 안 겹침) — `exact: true`와 DOM 순서(필터 바가 표보다 먼저 나옴, `.first()`)로 구분할 것.
-- **fetch 실패 → 에러 화면 전환을 기다리는 단언에는 넉넉한 타임아웃(예: 15초)을 줄 것.** `useScreenerData`가 TanStack Query의 기본 retry(3회, 지수 백오프)를 끄지 않으므로, 기본 5초로는 재시도 도중(`isPending` 유지) 타임아웃돼 "0건"으로 보이는 중간 상태를 에러로 오인해 실패한다.
+- **fetch 실패 → 에러 화면 전환을 기다리는 단언에는 넉넉한 타임아웃(예: 15초)을 줄 것.** `useScreenerData`가 TanStack Query의 기본 retry(3회, 지수 백오프)를 끄지 않아 최종 `isError`까지 여러 초가 걸리므로, 기본 5초로는 아직 `isPending`인 화면을 상대로 타임아웃된다. (예전에는 그 중간 상태가 "0건"을 확정값처럼 보여줘 에러 화면과 혼동되기까지 했다. 지금은 로딩 중 건수·기준일자·페이지 번호가 스켈레톤이라 그 혼동은 없지만, **대기 시간이 길다는 사실 자체는 그대로**다.)
+- **로딩 프레임을 단언하려면 `mockSnapshotDeferred`를 쓸 것**(`e2e/fixtures/snapshot.ts`). 테스트가 `release()`를 부를 때까지 `/api/snapshot/index` 응답을 붙잡아 둔다 — 고정 sleep은 짧으면 flaky하고 길면 스위트가 느려진다. 로딩 중 `<tbody>`에는 실제 행 대신 `tr[data-slot="screener-skeleton-row"]`(전부 `aria-hidden`)이 들어간다.
+- **`tbody tr`를 그대로 세는 단언(`toHaveCount(25)`/`toHaveCount(6)`)은 스켈레톤 행 수와 겹치면 안 된다.** 겹치면 로딩 중인 화면을 상대로 조용히 통과한다 — 상한은 `src/components/screener/ScreenerSkeleton.tsx`의 `skeletonRowCount`에 있고 현재 어느 레이아웃에서든 `<tr>` 20개다. 한쪽을 바꾸면 다른 쪽을 반드시 확인할 것.
 
 ## `astro dev`가 자동으로 백그라운드 데몬이 된다 — `webServer`를 깨뜨린다
 

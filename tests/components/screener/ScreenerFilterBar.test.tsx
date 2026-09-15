@@ -101,4 +101,24 @@ describe("ScreenerFilterBar", () => {
     );
     await expect.element(screen.getByText("3건 / 전체 10건")).toBeInTheDocument();
   });
+  // 헤더와 같은 규약 — 로딩 중 "0건"은 "진짜 0건"과 구분되지 않는다.
+  test("로딩 중에는 결과 건수 배지 대신 스켈레톤을 표시한다", async () => {
+    const screen = await render(
+      <ScreenerFilterBar
+        filters={EMPTY_FILTERS}
+        options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
+        onFiltersChange={() => {}}
+        onReset={() => {}}
+        resultCount={0}
+        totalCount={0}
+        status="loading"
+      />,
+    );
+
+    await expect.element(screen.getByText("0건", { exact: true })).not.toBeInTheDocument();
+    expect(screen.container.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    // 필터 컨트롤 자체는 계속 보인다.
+    await expect.element(screen.getByPlaceholder("종목명·발행인·ISIN 검색")).toBeInTheDocument();
+  });
 });
