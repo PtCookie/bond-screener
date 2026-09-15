@@ -2,18 +2,26 @@
  * "이번 tick에 뭘 할지" 결정하는 순수 함수. 시각과 `sync_run`/`app_meta` 조회 결과만으로
  * 판단하므로 D1/네트워크 없이 단위 테스트가 가능하다.
  *
- * 우선순위: 진행 중인 run이 있으면 무조건 이어서 처리 → 시세(짧음)를 항상 기본정보보다
- * 먼저(둘 다 이제 매 영업일 수집) → 기본정보가 오늘 대상 basDt로 끝났으면, base 재빌드
+ * 우선순위: 진행 중인 run이 있으면 무조건 이어서 처리(단 커서가 `STALE_RUNNING_RUN_MS`만큼
+ * 멈춰 있으면 포기) → 시세(짧음)를 항상 기본정보보다 먼저(둘 다 이제 매 영업일 수집)
+ * → 기본정보가 오늘 대상 basDt로 끝났으면, base 재빌드
  * 요일(또는 base가 아예 없으면)엔 전량 재빌드(snapshot), 그 외 평일엔 그날 변경분만 담은
  * bond 델타(bondDelta) — base(3MB대, immutable 캐시)를 매일 무효화하지 않기 위한
  * base+delta 구조다(`src/lib/snapshot/bond-delta.ts` 참고).
  */
 import type { SyncRun, SyncSource } from "@/lib/d1/sync-run-repo";
-import { EMPTY_RETRY_BACKOFF_MS, SNAPSHOT_MAX_ATTEMPTS, SNAPSHOT_REBUILD_WEEKDAY_KST } from "./config";
+import {
+  EMPTY_RETRY_BACKOFF_MS,
+  SNAPSHOT_MAX_ATTEMPTS,
+  SNAPSHOT_REBUILD_WEEKDAY_KST,
+  STALE_RUNNING_RUN_MS,
+} from "./config";
 import { kstWeekday, previousBusinessDayKst } from "./dates";
 
 export type SyncAction =
   | { kind: "resume"; source: SyncSource; basDt: number }
+  /** 진척 없이 방치된 `running` run을 `failed`로 마감하고 다음 tick에 계획을 새로 세우게 한다. */
+  | { kind: "abandon"; source: SyncSource; basDt: number }
   | { kind: "start"; source: SyncSource; basDt: number }
   | { kind: "snapshot"; basDt: number }
   | { kind: "bondDelta"; basDt: number }
@@ -75,6 +83,13 @@ export function planTick(input: PlanTickInput): SyncAction {
   } = input;
 
   if (runningRun) {
+    // `updated_at`은 `advanceSyncRun`이 페이지를 넘길 때만 갱신되므로 그대로 "커서 진척"의
+    // 신호로 쓸 수 있다. 이만큼 멈춰 있으면 재개해도 가망이 없다고 보고 놓아준다 —
+    // `getRunningSyncRun`이 `bas_dt`를 보지 않아, 놓아주지 않으면 며칠 지난 run이 이후
+    // 모든 tick을 점유한다(`STALE_RUNNING_RUN_MS` 주석 참고).
+    if (now.getTime() - runningRun.updated_at >= STALE_RUNNING_RUN_MS) {
+      return { kind: "abandon", source: runningRun.source, basDt: runningRun.bas_dt };
+    }
     return { kind: "resume", source: runningRun.source, basDt: runningRun.bas_dt };
   }
 

@@ -9,14 +9,22 @@ import { render } from "vitest-browser-react";
 import { userEvent } from "vitest/browser";
 import { screenerColumns, screenerFeatures } from "@/components/screener/columns";
 import { ScreenerPagination } from "@/components/screener/ScreenerPagination";
-import type { ScreenerRow } from "@/lib/screener/types";
+import type { ScreenerRow, ScreenerStatus } from "@/lib/screener/types";
 import { makeScreenerRow } from "../../helpers/screener-row";
 
 function makeRows(n: number): ScreenerRow[] {
   return Array.from({ length: n }, (_, i) => makeScreenerRow({ isinCd: `KR${String(i).padStart(10, "0")}` }));
 }
 
-function Harness({ rows, initialPageIndex = 0 }: { rows: ScreenerRow[]; initialPageIndex?: number }) {
+function Harness({
+  rows,
+  initialPageIndex = 0,
+  status,
+}: {
+  rows: ScreenerRow[];
+  initialPageIndex?: number;
+  status?: ScreenerStatus;
+}) {
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: initialPageIndex, pageSize: 25 });
   const table = useTable({
     features: screenerFeatures,
@@ -30,13 +38,36 @@ function Harness({ rows, initialPageIndex = 0 }: { rows: ScreenerRow[]; initialP
     // 0으로 자동 리셋해 nextPage() 등 페이지 이동 자체가 무력화된다.
     autoResetPageIndex: false,
   });
-  return <ScreenerPagination table={table} totalCount={rows.length} />;
+  return <ScreenerPagination table={table} totalCount={rows.length} status={status} />;
 }
 
 describe("ScreenerPagination", () => {
   test("총 0건이면 '0–0 / 전체 0건'을 표시한다", async () => {
     const screen = await render(<Harness rows={[]} />);
     await expect.element(screen.getByText("0–0 / 전체 0건")).toBeInTheDocument();
+  });
+
+  /**
+   * 로딩 중에도 바가 통째로 사라지지 않는 것이 이 테스트의 요점이다 — 언마운트하면
+   * 로딩 완료 순간 페이지가 바 높이만큼 튀고(표가 max-h-[70vh]로 잘려 바가 fold 근처에 있다),
+   * 페이지 크기 버튼처럼 URL/sessionStorage에서 이미 복원된 "맞는 정보"까지 함께 버리게 된다.
+   */
+  test("로딩 중에는 건수·페이지 번호만 스켈레톤이 되고 바와 페이지 크기 버튼은 남는다", async () => {
+    const screen = await render(<Harness rows={[]} status="loading" />);
+
+    await expect.element(screen.getByText("0–0 / 전체 0건")).not.toBeInTheDocument();
+    // 복원된 pageIndex가 1이면 "2 / 1"이라는 불가능한 값이 나온다 — 슬롯째 대체해 그것까지 막는다.
+    await expect.element(screen.getByText("1 / 1")).not.toBeInTheDocument();
+
+    await expect.element(screen.getByRole("button", { name: "25" })).toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "50" })).toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "100" })).toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "다음 페이지" })).toBeInTheDocument();
+  });
+
+  test("로딩 중 pageIndex가 복원돼 있어도 '2 / 1' 같은 불가능한 값이 뜨지 않는다", async () => {
+    const screen = await render(<Harness rows={[]} initialPageIndex={1} status="loading" />);
+    await expect.element(screen.getByText("2 / 1")).not.toBeInTheDocument();
   });
 
   test("첫 페이지에서는 처음/이전 버튼이 disabled다", async () => {

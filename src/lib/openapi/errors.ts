@@ -55,11 +55,26 @@ export class OpenApiUnexpectedResponseError extends Error {
  */
 export type RetryPolicy = "retry" | "backoff" | "abort-today" | "fatal";
 
+/**
+ * 시간이 지나면 풀릴 여지가 있는 HTTP 상태인지. 5xx는 게이트웨이·원본 서버의 일시적 장애,
+ * 408/429는 타임아웃·과다요청이라 같은 요청을 나중에 보내면 성공할 수 있다. 그 외(401/403 등)는
+ * 시크릿·등록·차단 문제라 몇 번을 보내도 결과가 같다.
+ */
+function isTransientHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
 /** `docs/api/README.md` "에러코드" 절의 현행 표를 그대로 반영한 매핑. */
 export function classify(error: unknown): RetryPolicy {
   if (error instanceof OpenApiGatewayError) {
     // 인증 계열(20/29/30/31)이 압도적으로 흔한 GW 오류 원인이며 전부 시크릿·등록 문제라 재시도 무의미.
-    return "fatal";
+    // 다만 `client.ts`의 parseGatewayError는 **HTTP 200이 아니면 무조건** 이 예외를 던지므로
+    // 포털 게이트웨이의 일시적 장애까지 같은 통에 담긴다 — 2026-09-15에 실제로 issu
+    // basDt=20260914가 25/31 페이지에서 504 한 번으로 `failed` 마감됐고, `failed`는
+    // `shouldStart()`(src/lib/sync/plan.ts)가 재시작 대상으로 보지 않는 데다 다음 날은 타깃
+    // basDt가 넘어가 버려 그날 기본정보를 영영 채우지 못했다. 그래서 status로 갈라
+    // 일시적 계열만 backoff(커서 유지 → 다음 tick 재개)로 돌린다.
+    return isTransientHttpStatus(error.httpStatus) ? "backoff" : "fatal";
   }
 
   if (error instanceof OpenApiError) {

@@ -28,10 +28,18 @@ describe("classify — docs/api/README.md 현행 에러코드 표를 그대로 �
     expect(classify(new OpenApiError(resultCode, "메시지"))).toBe(expected);
   });
 
-  test("OpenApiGatewayError는 returnReasonCode와 무관하게 항상 fatal", () => {
+  test("OpenApiGatewayError 인증 계열(4xx)은 returnReasonCode와 무관하게 fatal", () => {
     expect(classify(new OpenApiGatewayError(401, "20", "SERVICE_KEY_IS_NULL_ERROR"))).toBe("fatal");
     expect(classify(new OpenApiGatewayError(403, "30", "SERVICE_KEY_IS_NOT_REGISTERED_ERROR"))).toBe("fatal");
-    expect(classify(new OpenApiGatewayError(500, "UNKNOWN", ""))).toBe("fatal");
+    expect(classify(new OpenApiGatewayError(400, "UNKNOWN", ""))).toBe("fatal");
+  });
+
+  test("OpenApiGatewayError 일시 장애 계열은 backoff — 504 한 번에 당일 수집이 죽던 문제(2026-09-15)", () => {
+    // client.ts의 parseGatewayError는 HTTP 200이 아니면 무조건 이 예외를 던지므로, 포털
+    // 게이트웨이의 일시 장애도 여기로 온다. fatal이면 failSyncRun으로 그날이 끝나 버린다.
+    for (const status of [408, 429, 500, 502, 503, 504]) {
+      expect(classify(new OpenApiGatewayError(status, "UNKNOWN", String(status)))).toBe("backoff");
+    }
   });
 
   test("OpenApiUnexpectedResponseError는 backoff (구조화된 원인 코드가 없어 1회 재시도의 근거가 없음)", () => {

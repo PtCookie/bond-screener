@@ -40,6 +40,59 @@ describe("ScreenerTable", () => {
     await expect.element(screen.getByText("조건에 맞는 채권이 없습니다.")).not.toBeInTheDocument();
   });
 
+  /**
+   * 스켈레톤이 "표처럼 보이는 별개의 것"이 아니라 **실제 표 그 자체**여야 한다는 계약.
+   * 예전 구현은 동일 폭 pill을 div로 쌓아 헤더도, 컬럼 폭도, 모바일 2행 구조도 없었다.
+   */
+  test("로딩 중에도 실제 컬럼 헤더가 렌더된다", async () => {
+    await page.viewport(1200, 800);
+    const screen = await render(<Harness rows={[]} isLoading />);
+
+    await expect.element(screen.getByText("종목명")).toBeInTheDocument();
+    await expect.element(screen.getByText("거래량")).toBeInTheDocument();
+    expect(screen.container.querySelectorAll("thead th")).toHaveLength(screenerColumns.length);
+  });
+
+  // meta.width가 colgroup으로 상속되는지 — 컬럼 폭 무시가 예전 스켈레톤의 핵심 결함이었다.
+  test("로딩 중 colgroup이 컬럼별 meta.width를 그대로 반영한다", async () => {
+    await page.viewport(1200, 800);
+    const screen = await render(<Harness rows={[]} isLoading />);
+
+    const firstCol = screen.container.querySelector("colgroup col");
+    expect(firstCol).not.toBeNull();
+    expect((firstCol as HTMLTableColElement).style.width).toBe("16rem");
+  });
+
+  test("스켈레톤 행은 aria-hidden이고 실제 행과 data-slot으로 구분된다", async () => {
+    await page.viewport(1200, 800);
+    const screen = await render(<Harness rows={[]} isLoading />);
+
+    const skeletonRows = screen.container.querySelectorAll('tbody tr[data-slot="screener-skeleton-row"]');
+    expect(skeletonRows.length).toBeGreaterThan(0);
+    for (const row of skeletonRows) expect(row.getAttribute("aria-hidden")).toBe("true");
+    // 로딩 중에는 실제 행이 하나도 없어야 한다.
+    expect(screen.container.querySelectorAll('tbody tr[data-slot="table-row"]')).toHaveLength(0);
+    expect(screen.container.querySelector("table")?.getAttribute("aria-busy")).toBe("true");
+  });
+
+  /**
+   * ⚠️ 여기의 20은 `ScreenerSkeleton.tsx`의 상한과 묶여 있고, 그 상한은 E2E가 `tbody tr`를
+   * 그대로 세는 곳(`e2e/screener.spec.ts`의 25, `e2e/responsive.spec.ts`의 6)과 겹치지
+   * 않도록 고른 값이다. 이 숫자를 바꾸려면 두 스펙의 기대 행 수를 먼저 확인할 것.
+   */
+  test("스켈레톤 행 수는 데스크톱·모바일 모두 tr 20개로 맞춰진다", async () => {
+    await page.viewport(1200, 800);
+    const desktop = await render(<Harness rows={[]} isLoading />);
+    // pageSize 25 → min(25, 20) = 20행.
+    await expect.poll(() => desktop.container.querySelectorAll("tbody tr").length).toBe(20);
+
+    await page.viewport(390, 800);
+    const mobile = await render(<Harness rows={[]} isLoading />);
+    // 모바일은 종목당 2행이라 10종목 × 2 = 20행.
+    await expect.poll(() => mobile.container.querySelectorAll("tbody tr").length).toBe(20);
+    await page.viewport(1200, 800); // 다음 테스트에 영향 없도록 되돌린다.
+  });
+
   test("0건이면 빈 상태를 표시한다", async () => {
     const screen = await render(<Harness rows={[]} />);
     await expect.element(screen.getByText("조건에 맞는 채권이 없습니다.")).toBeInTheDocument();

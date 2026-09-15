@@ -47,6 +47,22 @@ export const SNAPSHOT_MAX_ATTEMPTS = 3;
 export const EMPTY_RETRY_BACKOFF_MS = 15 * 60_000;
 
 /**
+ * `status='running'`인 run의 커서가 이만큼 진척 없이 멈춰 있으면 `planTick`이 그 run을
+ * 포기(`failed` 마감)하고 오늘 일을 새로 계획한다.
+ *
+ * `getRunningSyncRun`은 `bas_dt`를 보지 않으므로, 한 번 `running`으로 방치된 run은 며칠이
+ * 지나도 모든 tick을 `resume`으로 붙잡아 시세까지 포함한 파이프라인 전체를 막는다. 게이트웨이
+ * 일시 장애(HTTP 5xx)를 `backoff`(커서 유지)로 돌리면서 그 방치 확률이 올라갔기 때문에 상한을
+ * 함께 둔다(`src/lib/openapi/errors.ts`의 classify 참고).
+ *
+ * **cron 창 간격(24시간)보다 짧게 잡으면 안 된다** — 창은 KST 13:00–17:59로 하루 5시간뿐이라,
+ * 창이 닫힐 때까지 못 끝낸 정상 run은 다음 창까지 최대 19시간을 진척 없이 보낸다. 그보다 짧은
+ * 임계값은 그 정상 run까지 죽인다. 24시간이면 "한 창을 통째로 날린 run"만 다음 창 도중에
+ * 포기되고, 그 뒤 남은 시간으로 당일 수집을 새로 시작할 수 있다.
+ */
+export const STALE_RUNNING_RUN_MS = 24 * 60 * 60_000;
+
+/**
  * 하루 변경 bond 행 수가 이 값 이상이면 `buildAndPutBondDelta`가 델타 대신 전량 재빌드로
  * 폴백한다(`{ tooLarge: true }`) — 델타가 base에 근접한 크기로 불어나면 base+delta 구조의
  * 이점(작은 일간 페이로드)이 사라지므로, 그 지점부터는 차라리 base를 다시 굳히는 편이 낫다.

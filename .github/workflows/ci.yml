@@ -85,9 +85,12 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # test 잡과 독립적으로 돈다. 각 스펙이 /api/snapshot/*를 page.route()로 모킹하므로
-  # (e2e/fixtures/snapshot.ts) D1 시드(pnpm seed:local)가 필요 없고, webServer가 `pnpm dev`를
-  # 직접 띄우므로 dist/ 빌드 산출물도 필요 없다.
+  # test 잡과 독립적으로 돈다. webServer가 `pnpm dev`를 직접 띄우므로 dist/ 빌드 산출물이
+  # 필요 없고, 데이터도 러너에서 만든다 — 목록 화면은 각 스펙이 /api/snapshot/*를
+  # page.route()로 모킹하고(e2e/fixtures/snapshot.ts), SSR이 D1을 직접 타는 상세 페이지는
+  # `pnpm test:e2e`가 앞단에서 부르는 scripts/seed-e2e.mjs가 E2E 전용 로컬 D1
+  # (.wrangler/e2e-state)에 마이그레이션 + 픽스처 1종목을 심어 준다. 둘 다
+  # pnpm seed:local(.backfill/ 319MB, 오픈API 재수집 필요)과 무관하므로 별도 스텝이 없다.
   e2e:
     name: e2e
     runs-on: ubuntu-latest

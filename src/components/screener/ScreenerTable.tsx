@@ -1,16 +1,17 @@
 import type { MouseEvent, CSSProperties } from "react";
-import type { ReactTable, Row } from "@tanstack/react-table";
+import type { Header, ReactTable, Row } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 import { ScreenerEmpty } from "./ScreenerEmpty";
-import { ScreenerSkeleton } from "./ScreenerSkeleton";
+import { ScreenerSkeletonBar, skeletonRowCount } from "./ScreenerSkeleton";
 import { ScreenerSortButton } from "./ScreenerSortButton";
 import type { screenerFeatures } from "./columns";
 import type { ScreenerRow } from "@/lib/screener/types";
 
 type ScreenerReactTable = ReactTable<typeof screenerFeatures, ScreenerRow>;
 type ScreenerRowModel = Row<typeof screenerFeatures, ScreenerRow>;
+type ScreenerHeaderCell = Header<typeof screenerFeatures, ScreenerRow, unknown>;
 
 interface ScreenerTableProps {
   table: ScreenerReactTable;
@@ -56,19 +57,82 @@ function sumColWidths(widths: (number | undefined)[]): number {
   return widths.reduce<number>((sum, w) => sum + (w ?? 0), 0);
 }
 
+/** 실제 셀과 스켈레톤 셀이 공유하는 정렬/구분선 클래스 — 둘이 어긋나면 스켈레톤이 표와 닮지 않는다. */
+function cellMetaClass(header: ScreenerHeaderCell): string {
+  return cn(
+    header.column.columnDef.meta?.align === "end" && "text-right",
+    header.column.columnDef.meta?.groupStart && "border-l",
+  );
+}
+
 function handleRowClick(e: MouseEvent<HTMLTableRowElement>, row: ScreenerRowModel): void {
   if ((e.target as HTMLElement).closest("a, button")) return;
   window.location.href = `/bond/${row.original.isinCd}`;
 }
 
+/**
+ * 로딩 중에도 헤더·colgroup·sticky는 **진짜**를 그대로 쓰고 본문만 이 행들로 채운다
+ * (`table.getHeaderGroups()`는 데이터가 비어도 동작한다) — 그래서 컬럼 폭이 `meta.width`로부터
+ * 자동으로 상속되고, 데이터가 도착해도 표 모양이 바뀌지 않는다.
+ *
+ * `aria-hidden`: 장식이라 스크린리더가 빈 셀 수백 개를 읽지 않게 감춘다(로딩 사실은
+ * `BondScreener`의 라이브 리전이 알린다). 포커스 가능한 요소가 없어 감춰도 안전하다.
+ * `data-slot`: `TableRow`가 props를 자신의 `data-slot="table-row"` 뒤에 spread하므로 깨끗이
+ * 덮어써지고, 테스트가 실제 행과 스켈레톤 행을 구분하는 훅이 된다.
+ */
+function DesktopSkeletonRows({ headers, count }: { headers: ScreenerHeaderCell[]; count: number }) {
+  return Array.from({ length: count }, (_, r) => (
+    <TableRow key={`sk-${r}`} data-slot="screener-skeleton-row" aria-hidden="true" className="group/row">
+      {headers.map((header, idx) => (
+        <TableCell key={header.id} className={cn(idx === 0 && STICKY_FIRST_COL, cellMetaClass(header))}>
+          <ScreenerSkeletonBar rowIdx={r} colIdx={idx} align={header.column.columnDef.meta?.align} />
+        </TableCell>
+      ))}
+    </TableRow>
+  ));
+}
+
+/** 모바일 스켈레톤 — 실제 모바일 레이아웃과 같이 종목당 2행(이름 행 + 데이터 행)을 낸다. */
+function MobileSkeletonRows({ dataHeaders, count }: { dataHeaders: ScreenerHeaderCell[]; count: number }) {
+  return Array.from({ length: count }, (_, b) => [
+    <TableRow key={`sk-${b}-name`} data-slot="screener-skeleton-row" aria-hidden="true" className="border-b-0">
+      <TableCell colSpan={dataHeaders.length} className="pb-1">
+        <div className={cn("sticky left-0", MOBILE_NAME_MAX_WIDTH)}>
+          <ScreenerSkeletonBar rowIdx={b} colIdx={0} />
+        </div>
+      </TableCell>
+    </TableRow>,
+    <TableRow key={`sk-${b}-data`} data-slot="screener-skeleton-row" aria-hidden="true">
+      {dataHeaders.map((header, idx) => (
+        <TableCell key={header.id} className={cellMetaClass(header)}>
+          <ScreenerSkeletonBar rowIdx={b} colIdx={idx + 1} align={header.column.columnDef.meta?.align} />
+        </TableCell>
+      ))}
+    </TableRow>,
+  ]);
+}
+
 /** 데스크톱(md 이상): 11컬럼 한 행, 종목명만 sticky. */
-function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: ScreenerRowModel[] }) {
+function DesktopTable({
+  table,
+  rows,
+  isLoading,
+}: {
+  table: ScreenerReactTable;
+  rows: ScreenerRowModel[];
+  isLoading: boolean;
+}) {
   const headerGroups = table.getHeaderGroups();
   const headers = headerGroups[0]?.headers ?? [];
   const minWidth = sumColWidths(headers.map((h) => h.column.columnDef.meta?.width));
 
   return (
-    <Table className="table-fixed" containerClassName={TABLE_MAX_HEIGHT_CLASS} style={{ minWidth: `${minWidth}rem` }}>
+    <Table
+      className="table-fixed"
+      containerClassName={TABLE_MAX_HEIGHT_CLASS}
+      style={{ minWidth: `${minWidth}rem` }}
+      aria-busy={isLoading}
+    >
       <colgroup>
         {headers.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -94,37 +158,54 @@ function DesktopTable({ table, rows }: { table: ScreenerReactTable; rows: Screen
         ))}
       </TableHeader>
       <TableBody>
-        {rows.map((row) => (
-          <TableRow key={row.id} className="group/row cursor-pointer" onClick={(e) => handleRowClick(e, row)}>
-            {row.getAllCells().map((cell, idx) => (
-              <TableCell
-                key={cell.id}
-                className={cn(
-                  "truncate",
-                  idx === 0 && STICKY_FIRST_COL,
-                  cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
-                  cell.column.columnDef.meta?.groupStart && "border-l",
-                )}
-              >
-                <table.FlexRender cell={cell} />
-              </TableCell>
-            ))}
-          </TableRow>
-        ))}
+        {isLoading ? (
+          <DesktopSkeletonRows headers={headers} count={skeletonRowCount(table.state.pagination.pageSize, false)} />
+        ) : (
+          rows.map((row) => (
+            <TableRow key={row.id} className="group/row cursor-pointer" onClick={(e) => handleRowClick(e, row)}>
+              {row.getAllCells().map((cell, idx) => (
+                <TableCell
+                  key={cell.id}
+                  className={cn(
+                    "truncate",
+                    idx === 0 && STICKY_FIRST_COL,
+                    cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
+                    cell.column.columnDef.meta?.groupStart && "border-l",
+                  )}
+                >
+                  <table.FlexRender cell={cell} />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))
+        )}
       </TableBody>
     </Table>
   );
 }
 
 /** 모바일(md 미만): 종목당 2행 — 1행 종목명(sticky, 전체폭), 2행 나머지 컬럼(가로 스크롤). */
-function MobileTable({ table, rows }: { table: ScreenerReactTable; rows: ScreenerRowModel[] }) {
+function MobileTable({
+  table,
+  rows,
+  isLoading,
+}: {
+  table: ScreenerReactTable;
+  rows: ScreenerRowModel[];
+  isLoading: boolean;
+}) {
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
   const [nameHeader, ...dataHeaders] = headers;
   const dataColCount = dataHeaders.length;
   const minWidth = sumColWidths(dataHeaders.map((h) => h.column.columnDef.meta?.width));
 
   return (
-    <Table className="table-fixed" containerClassName={TABLE_MAX_HEIGHT_CLASS} style={{ minWidth: `${minWidth}rem` }}>
+    <Table
+      className="table-fixed"
+      containerClassName={TABLE_MAX_HEIGHT_CLASS}
+      style={{ minWidth: `${minWidth}rem` }}
+      aria-busy={isLoading}
+    >
       <colgroup>
         {dataHeaders.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -156,42 +237,49 @@ function MobileTable({ table, rows }: { table: ScreenerReactTable; rows: Screene
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((row) => {
-          const [nameCell, ...dataCells] = row.getAllCells();
-          return [
-            <TableRow
-              key={`${row.id}-name`}
-              className={cn("hover:bg-muted/50 cursor-pointer", "border-b-0")}
-              onClick={(e) => handleRowClick(e, row)}
-            >
-              <TableCell colSpan={dataColCount} className="pb-1">
-                {nameCell && (
-                  <div className={cn("sticky left-0 font-medium", MOBILE_NAME_MAX_WIDTH)}>
-                    <table.FlexRender cell={nameCell} />
-                  </div>
-                )}
-              </TableCell>
-            </TableRow>,
-            <TableRow
-              key={`${row.id}-data`}
-              className="hover:bg-muted/50 cursor-pointer"
-              onClick={(e) => handleRowClick(e, row)}
-            >
-              {dataCells.map((cell) => (
-                <TableCell
-                  key={cell.id}
-                  className={cn(
-                    "truncate",
-                    cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
-                    cell.column.columnDef.meta?.groupStart && "border-l",
+        {isLoading ? (
+          <MobileSkeletonRows
+            dataHeaders={dataHeaders}
+            count={skeletonRowCount(table.state.pagination.pageSize, true)}
+          />
+        ) : (
+          rows.map((row) => {
+            const [nameCell, ...dataCells] = row.getAllCells();
+            return [
+              <TableRow
+                key={`${row.id}-name`}
+                className={cn("hover:bg-muted/50 cursor-pointer", "border-b-0")}
+                onClick={(e) => handleRowClick(e, row)}
+              >
+                <TableCell colSpan={dataColCount} className="pb-1">
+                  {nameCell && (
+                    <div className={cn("sticky left-0 font-medium", MOBILE_NAME_MAX_WIDTH)}>
+                      <table.FlexRender cell={nameCell} />
+                    </div>
                   )}
-                >
-                  <table.FlexRender cell={cell} />
                 </TableCell>
-              ))}
-            </TableRow>,
-          ];
-        })}
+              </TableRow>,
+              <TableRow
+                key={`${row.id}-data`}
+                className="hover:bg-muted/50 cursor-pointer"
+                onClick={(e) => handleRowClick(e, row)}
+              >
+                {dataCells.map((cell) => (
+                  <TableCell
+                    key={cell.id}
+                    className={cn(
+                      "truncate",
+                      cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
+                      cell.column.columnDef.meta?.groupStart && "border-l",
+                    )}
+                  >
+                    <table.FlexRender cell={cell} />
+                  </TableCell>
+                ))}
+              </TableRow>,
+            ];
+          })
+        )}
       </TableBody>
     </Table>
   );
@@ -200,10 +288,14 @@ function MobileTable({ table, rows }: { table: ScreenerReactTable; rows: Screene
 export function ScreenerTable({ table, isLoading, onResetFilters }: ScreenerTableProps) {
   const isMobile = useIsMobile();
 
-  if (isLoading) return <ScreenerSkeleton />;
+  // 로딩 중에는 표를 통째로 다른 컴포넌트로 갈아끼우지 않고 본문만 스켈레톤으로 채운다 —
+  // 헤더·컬럼 폭·sticky가 진짜 그대로라 데이터가 도착해도 표 모양이 변하지 않는다.
+  const rows = isLoading ? [] : table.getRowModel().rows;
+  if (!isLoading && rows.length === 0) return <ScreenerEmpty onResetFilters={onResetFilters} />;
 
-  const rows = table.getRowModel().rows;
-  if (rows.length === 0) return <ScreenerEmpty onResetFilters={onResetFilters} />;
-
-  return isMobile ? <MobileTable table={table} rows={rows} /> : <DesktopTable table={table} rows={rows} />;
+  return isMobile ? (
+    <MobileTable table={table} rows={rows} isLoading={isLoading} />
+  ) : (
+    <DesktopTable table={table} rows={rows} isLoading={isLoading} />
+  );
 }

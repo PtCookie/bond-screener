@@ -6,7 +6,7 @@ import { useScreenerData } from "@/hooks/useScreenerData";
 import { useFilterPresets } from "@/hooks/useFilterPresets";
 import { applyFilters, buildFilterOptions } from "@/lib/screener/filters";
 import { decodePresetQuery, encodePresetQuery } from "@/lib/screener/presets";
-import type { ScreenerRow } from "@/lib/screener/types";
+import type { ScreenerRow, ScreenerStatus } from "@/lib/screener/types";
 import { screenerColumns, screenerFeatures } from "./columns";
 import { ScreenerError } from "./ScreenerError";
 import { ScreenerFilterBar } from "./ScreenerFilterBar";
@@ -47,6 +47,10 @@ function BondScreenerInner() {
 
   const pagination: PaginationState = { pageIndex: state.pageIndex, pageSize: state.pageSize };
 
+  // 건수·기준일자를 보여줄 근거가 있는지 — 헤더/필터바/페이지네이션이 공유하는 하나의 신호.
+  // useScreenerData는 placeholderData가 없어 isPending은 정확히 "아직 데이터가 없다"를 뜻한다.
+  const status: ScreenerStatus = isError ? "error" : isPending ? "loading" : "ready";
+
   const table = useTable({
     features: screenerFeatures,
     columns: screenerColumns,
@@ -70,7 +74,16 @@ function BondScreenerInner() {
         basDt={data?.priceBasDt ?? data?.basDt ?? null}
         filteredCount={filteredRows.length}
         totalCount={rows.length}
+        status={status}
       />
+      {/* 스켈레톤 행은 aria-hidden이라 로딩 사실을 AT에 알리는 건 이 리전 하나다.
+          조건부 마운트가 아니라 항상 마운트하고 텍스트만 교체한다 — 리전이 내용과 동시에
+          삽입되면 낭독이 일관되지 않는다. 문구에 "건"·"전체"·숫자를 넣지 않는 것은 의도적이다:
+          테스트와 E2E가 getByText 부분일치로 건수 문자열을 찾고 있어(이미 헤더 ↔ 필터바
+          중복 때문에 .first()가 필요하다) 세 번째 매치를 만들면 안 된다. */}
+      <p role="status" className="sr-only">
+        {isPending ? "채권 목록을 불러오는 중입니다." : ""}
+      </p>
       {/* 표시 개수를 늘려 스크롤이 길어져도 적용된 필터가 계속 보이도록 sticky 고정.
           z-30: 아래 테이블 헤더(z-20)보다 위, 팝오버(z-50)보다는 아래. */}
       <div className="bg-background sticky top-0 z-30 py-2">
@@ -86,6 +99,7 @@ function BondScreenerInner() {
           onApplyPreset={applyPreset}
           resultCount={filteredRows.length}
           totalCount={rows.length}
+          status={status}
         />
       </div>
       {isError ? (
@@ -100,7 +114,7 @@ function BondScreenerInner() {
           <div className="overflow-hidden rounded-lg border">
             <ScreenerTable table={table} isLoading={isPending} onResetFilters={resetFilters} />
           </div>
-          <ScreenerPagination table={table} totalCount={filteredRows.length} />
+          <ScreenerPagination table={table} totalCount={filteredRows.length} status={status} />
         </>
       )}
     </div>

@@ -152,6 +152,22 @@ describe("runIssuSyncStep — 오픈API 에러 정책", () => {
     expect(updatedRun?.error).toContain("30");
   });
 
+  test("GW 레벨 오류(HTTP 504): backoff — D1 무변경, 커서 불변, running 유지 (2026-09-15 회귀)", async () => {
+    // 실제 장애 시 응답 본문은 OpenAPI_ServiceResponse 봉투가 아니라 그냥 "504"였다
+    // (parseGatewayError가 returnReasonCode를 UNKNOWN으로 채우는 경로). 이때 fatal로
+    // 분류되면 25/31 페이지에서 그날 수집 전체가 failed로 끝나 영영 재시도되지 않는다.
+    stubFetchOnce(504, "504");
+
+    const run = await startAndGetRun();
+    const result = await runIssuSyncStep(env, run);
+
+    expect(result).toEqual({ done: false, queriesUsed: 0 });
+    const bondCount = await env.DB.prepare("SELECT COUNT(*) c FROM bond").first<{ c: number }>();
+    expect(bondCount?.c).toBe(0);
+    const updatedRun = await getSyncRun(env.DB, "issu", BAS_DT);
+    expect(updatedRun).toMatchObject({ status: "running", next_page: 1 });
+  });
+
   test("GW 레벨 오류(HTTP 401): failed로 마감된다", async () => {
     stubFetchOnce(
       401,

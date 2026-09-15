@@ -37,6 +37,29 @@ function stubSnapshot(bonds: SnapshotFixtureBond[]) {
 }
 
 describe("BondScreener", () => {
+  /**
+   * 로딩 프레임 회귀 가드. `stubFetch`는 매칭 안 된 라우트에서 throw하고 즉시 응답해
+   * 로딩 상태를 붙잡을 수 없으므로, 영원히 pending인 fetch를 직접 심어 `isPending`을 고정한다
+   * (정리는 이 파일 상단의 `afterEach(vi.unstubAllGlobals)`가 맡는다).
+   */
+  test("로딩 중에는 0 건수를 확정값처럼 보여주지 않는다", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => {}));
+    const screen = await render(<BondScreener />);
+
+    // 스켈레톤이 떴는지부터 확인해 "아직 마운트 전이라 문구가 없다"와 구분한다.
+    await expect
+      .poll(() => screen.container.querySelectorAll('tbody tr[data-slot="screener-skeleton-row"]').length)
+      .toBeGreaterThan(0);
+
+    await expect.element(screen.getByText("총 0건", { exact: true })).not.toBeInTheDocument();
+    await expect.element(screen.getByText("0–0 / 전체 0건")).not.toBeInTheDocument();
+    await expect.element(screen.getByText("1 / 1")).not.toBeInTheDocument();
+    await expect.element(screen.getByText("기준일자 —")).not.toBeInTheDocument();
+
+    // 로딩 사실은 라이브 리전이 알린다(스켈레톤 행은 aria-hidden이라 낭독되지 않는다).
+    await expect.element(screen.getByText("채권 목록을 불러오는 중입니다.")).toBeInTheDocument();
+  });
+
   test("정상 로드 — 전체 건수를 표시한다", async () => {
     stubSnapshot(makeBonds());
     const screen = await render(<BondScreener />);

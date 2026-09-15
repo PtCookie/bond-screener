@@ -31,6 +31,16 @@ export interface ScreenerRow {
   trqu: number | null;
 }
 
+/**
+ * 건수·기준일자를 보여줄 근거가 있는지를 나타내는 화면 상태.
+ *
+ * `ScreenerHeader`/`ScreenerFilterBar`/`ScreenerPagination`이 공유한다 — 셋 다
+ * "지금 보여줄 진짜 숫자가 있는가"라는 같은 질문에 답하기 때문이다. 불리언 하나로는
+ * 부족하다: 로딩은 스켈레톤으로 자리를 지켜야 하지만, 에러는 아예 렌더하지 않아야 한다
+ * (영원히 깜빡이는 스켈레톤은 로딩이 끝나지 않는다는 뜻으로 읽힌다).
+ */
+export type ScreenerStatus = "loading" | "error" | "ready";
+
 // 원본 ColumnMeta 시그니처와 제네릭을 맞추기 위한 선언 병합. 본문(align)은 제네릭을 쓰지 않는다.
 /* eslint-disable @typescript-eslint/no-unused-vars */
 declare module "@tanstack/react-table" {
