@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { runSyncTick } from "@/lib/sync/tick";
 import { getRunningSyncRun, getSyncRun, startSyncRun, finishSyncRun } from "@/lib/d1/sync-run-repo";
 import { setAppMeta } from "@/lib/d1/meta-repo";
-import { EMPTY_RETRY_BACKOFF_MS } from "@/lib/sync/config";
+import { EMPTY_RETRY_BACKOFF_MS, STALE_RUNNING_RUN_MS } from "@/lib/sync/config";
 import { resetD1 } from "./helpers/reset-d1";
 import { buildEnvelope, buildErrorEnvelope, buildIssuItems, buildPriceItems } from "./helpers/envelope";
 import { stubFetchOnce } from "./helpers/fetch-stub";
@@ -151,8 +151,10 @@ describe("runSyncTick — 시세 우선순위: 시세가 끝난 뒤에만 기본
 describe("runSyncTick — running run 우선순위", () => {
   test("source/basDt와 무관하게 running run이 있으면 무조건 이어서 처리한다", async () => {
     // 오늘(target basDt)과 전혀 무관한 과거 basDt의 issu run이 running 상태로 남아 있다고 가정.
+    // 단 커서는 방금 전진한 상태여야 한다 — STALE_RUNNING_RUN_MS를 넘기면 resume이 아니라
+    // abandon 대상이 된다(바로 아래 테스트).
     const staleBasDt = 20200101;
-    await startSyncRun(env.DB, "issu", staleBasDt, 100);
+    await startSyncRun(env.DB, "issu", staleBasDt, THURSDAY_SCHEDULED - 60_000);
 
     const items = buildIssuItems(1, String(staleBasDt));
     stubFetchOnce(200, buildEnvelope({ items, totalCount: 1 }));
@@ -164,6 +166,25 @@ describe("runSyncTick — running run 우선순위", () => {
 
     // 오늘치 시세는 아예 건드리지 않았어야 한다 — running이 최우선이라 planTick이 시세 분기로 안 감.
     expect(await getSyncRun(env.DB, "price", THURSDAY_TARGET_BAS_DT)).toBeNull();
+  });
+
+  test("진척 없이 방치된 running run은 failed로 마감하고 그 tick에서 다른 일은 하지 않는다", async () => {
+    // getRunningSyncRun은 bas_dt를 보지 않으므로, 놓아주지 않으면 이 run이 이후 모든 tick을
+    // resume으로 점유해 시세·기본정보·스냅샷이 전부 멈춘다.
+    const staleBasDt = 20200101;
+    await startSyncRun(env.DB, "issu", staleBasDt, THURSDAY_SCHEDULED - STALE_RUNNING_RUN_MS);
+
+    // 오픈API를 부르면 실패하도록 스텁을 두지 않는다 — abandon 경로는 fetch를 쓰지 않는다.
+    await runSyncTick(env, THURSDAY_SCHEDULED);
+
+    const abandoned = await getSyncRun(env.DB, "issu", staleBasDt);
+    expect(abandoned?.status).toBe("failed");
+    expect(abandoned?.error).toContain("stale running run abandoned");
+    expect(abandoned?.next_page).toBe(1); // 커서는 건드리지 않는다
+
+    // 마감만 하고 끝 — 같은 tick에서 오늘치 시세를 시작하지는 않는다(다음 tick이 새로 계획).
+    expect(await getSyncRun(env.DB, "price", THURSDAY_TARGET_BAS_DT)).toBeNull();
+    expect(await getRunningSyncRun(env.DB)).toBeNull();
   });
 });
 

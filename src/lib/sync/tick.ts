@@ -7,7 +7,14 @@
  * 예산 중 먼저 닿는 쪽까지 페이지를 이어 처리한다 — 오픈API 응답 지연(~500ms/페이지)이
  * 실질적인 상한이라 wall-clock으로 제어하는 게 맞다.
  */
-import { getRunningSyncRun, getSyncRun, startSyncRun, type SyncRun, type SyncSource } from "@/lib/d1/sync-run-repo";
+import {
+  failSyncRun,
+  getRunningSyncRun,
+  getSyncRun,
+  startSyncRun,
+  type SyncRun,
+  type SyncSource,
+} from "@/lib/d1/sync-run-repo";
 import { getAppMeta, setAppMeta } from "@/lib/d1/meta-repo";
 import { buildAndPutSnapshot } from "@/lib/snapshot/build";
 import { buildAndPutBondDelta } from "@/lib/snapshot/bond-delta";
@@ -15,7 +22,7 @@ import { planTick, type AttemptCounter } from "./plan";
 import { previousBusinessDayKst } from "./dates";
 import { runIssuSyncStep } from "./issu-sync";
 import { runPriceSyncStep } from "./price-sync";
-import { MAX_PAGES_PER_TICK, TICK_WALL_BUDGET_MS } from "./config";
+import { MAX_PAGES_PER_TICK, STALE_RUNNING_RUN_MS, TICK_WALL_BUDGET_MS } from "./config";
 
 export interface SyncEnv {
   DB: D1Database;
@@ -67,6 +74,20 @@ export async function runSyncTick(env: SyncEnv, scheduledTime: number): Promise<
 
   if (action.kind === "idle") {
     console.log("[sync] 오늘 할 일 없음");
+    return;
+  }
+
+  // 진척 없이 방치된 run을 `failed`로 마감만 하고 이번 tick을 끝낸다 — 다음 tick의
+  // `planTick`이 이 run에 더는 붙잡히지 않고 오늘 일을 새로 계획한다.
+  if (action.kind === "abandon") {
+    await failSyncRun(
+      env.DB,
+      action.source,
+      action.basDt,
+      `stale running run abandoned (진척 없이 ${STALE_RUNNING_RUN_MS}ms 경과)`,
+      Date.now(),
+    );
+    console.warn(`[sync] 방치된 run 포기: ${action.source} basDt=${action.basDt}`);
     return;
   }
 

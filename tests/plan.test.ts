@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { SyncRun } from "@/lib/d1/sync-run-repo";
-import { EMPTY_RETRY_BACKOFF_MS } from "@/lib/sync/config";
+import { EMPTY_RETRY_BACKOFF_MS, STALE_RUNNING_RUN_MS } from "@/lib/sync/config";
 import { planTick, type PlanTickInput } from "@/lib/sync/plan";
 
 function run(overrides: Partial<SyncRun>): SyncRun {
@@ -42,9 +42,39 @@ const WEDNESDAY = new Date("2026-08-26T01:00:00Z");
 
 describe("planTick", () => {
   test("진행 중인 run이 있으면 무조건 이어서 처리 (source 무관)", () => {
-    const running = run({ source: "issu", bas_dt: 20260821, status: "running" });
+    const running = run({
+      source: "issu",
+      bas_dt: 20260821,
+      status: "running",
+      // 커서가 방금 전진한 상태 — stale 가드에 걸리지 않아야 한다.
+      updated_at: MONDAY.getTime() - 60_000,
+    });
     const action = planTick(input({ now: MONDAY, runningRun: running }));
     expect(action).toEqual({ kind: "resume", source: "issu", basDt: 20260821 });
+  });
+
+  test("진척 없이 STALE_RUNNING_RUN_MS가 지난 running run은 포기(abandon)", () => {
+    // `getRunningSyncRun`은 bas_dt를 보지 않아, 놓아주지 않으면 며칠 지난 run이 시세까지
+    // 포함한 이후 모든 tick을 resume으로 점유한다.
+    const stuck = run({
+      source: "issu",
+      bas_dt: 20260821,
+      status: "running",
+      updated_at: MONDAY.getTime() - STALE_RUNNING_RUN_MS,
+    });
+    const action = planTick(input({ now: MONDAY, runningRun: stuck }));
+    expect(action).toEqual({ kind: "abandon", source: "issu", basDt: 20260821 });
+  });
+
+  test("임계값 직전(진척 후 STALE_RUNNING_RUN_MS - 1ms)이면 아직 resume", () => {
+    const running = run({
+      source: "price",
+      bas_dt: 20260821,
+      status: "running",
+      updated_at: MONDAY.getTime() - STALE_RUNNING_RUN_MS + 1,
+    });
+    const action = planTick(input({ now: MONDAY, runningRun: running }));
+    expect(action).toEqual({ kind: "resume", source: "price", basDt: 20260821 });
   });
 
   test("시세가 아직 시작 전이면 시세부터 시작", () => {
