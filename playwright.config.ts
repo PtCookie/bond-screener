@@ -1,18 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * 이 앱(Astro dev 서버) 전용 E2E 설정.
- *
- * 컴포넌트 단위 크로스브라우저 검증은 Vitest Browser Mode(vitest.browser.config.ts,
- * chromium/firefox/webkit 3종)가 이미 담당한다 — 여기서는 실제 Astro 서버·SSR·라우팅·
- * 전체 페이지 리로드를 거치는 상태 지속성 등 컴포넌트 테스트로 재현할 수 없는 것만 본다.
- * 그래서 기본 프로젝트는 데스크톱 chromium 1종 + 모바일 1종으로 좁힌다.
- *
- * 데이터는 두 갈래다. 목록 화면이 쓰는 `/api/snapshot/*`는 각 스펙이 page.route()로
- * 모킹하고(e2e/fixtures/snapshot.ts), SSR이 D1을 직접 타 모킹이 닿지 않는 상세
- * 페이지(/bond/[id])는 `scripts/seed-e2e.mjs`가 E2E 전용 persist 경로에 심는 픽스처
- * 종목으로 검증한다 — 둘 다 pnpm seed:local(.backfill/ 319MB, 오픈API 재수집 필요)
- * 없이 결정론적으로 돈다.
+ * Read environment variables from file.
+ * https://github.com/motdotla/dotenv
+ */
+// import dotenv from 'dotenv';
+// import path from 'path';
+// dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+/**
+ * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -25,15 +22,11 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  // The html report only exists as a downloadable artifact on CI; `github` is what puts a failure
-  // inline on the commit/PR, where it's actually seen. `open: "never"` keeps the reporter from
-  // trying to serve the report and hanging the job.
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "html",
+  reporter: "html",
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
     baseURL: "http://localhost:4321",
-
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: "on-first-retry",
   },
@@ -49,14 +42,33 @@ export default defineConfig({
       use: { ...devices["Pixel 5"] },
     },
 
-    // firefox/webkit은 CI에서만 — 로컬 실행 시간을 4배로 늘리지 않기 위함. 브라우저별
-    // 렌더링 차이는 Vitest Browser Mode(위 참고)가 컴포넌트 수준에서 이미 덮는다.
+    /* Test against minor browsers on CI. */
     ...(process.env.CI
       ? [
-          { name: "firefox", use: { ...devices["Desktop Firefox"] } },
-          { name: "webkit", use: { ...devices["Desktop Safari"] } },
+          {
+            name: "firefox",
+            use: { ...devices["Desktop Firefox"] },
+          },
+          {
+            name: "webkit",
+            use: { ...devices["Desktop Safari"] },
+          },
+          {
+            name: "Mobile Safari",
+            use: { ...devices["iPhone 12"] },
+          },
         ]
       : []),
+
+    /* Test against branded browsers. */
+    // {
+    //   name: 'Microsoft Edge',
+    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
+    // },
+    // {
+    //   name: 'Google Chrome',
+    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
+    // },
   ],
 
   /* Run your local dev server before starting the tests */
@@ -64,19 +76,10 @@ export default defineConfig({
     command: "pnpm run dev",
     url: "http://localhost:4321",
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    // Astro 7.2({astro}/dist/cli/agent.js)는 `am-i-vibing`으로 "AI 에이전트가 실행 중인지"를
-    // CLAUDECODE 등 환경변수로 감지해, 감지되면 `--background` 없이도 dev 서버를 자동으로
-    // 백그라운드 데몬으로 띄우고 launcher 프로세스는 즉시 종료한다(실측 확인: Claude Code
-    // 세션에서 `astro dev`를 아무 플래그 없이 실행해도 상태 메시지만 찍고 바로 끝난다).
-    // Playwright는 command가 계속 살아있는 포그라운드 프로세스라고 가정하므로, 이 자동
-    // 백그라운드 전환을 "Process from config.webServer exited early"로 오인해 실패한다.
-    // CLAUDECODE를 빈 문자열로 지워(`checkEnvVar`가 Boolean() 판정이라 빈 문자열은
-    // falsy) 감지를 끄면 정상적인 포그라운드 프로세스로 뜬다.
     // E2E_PERSIST_PATH: astro.config.mjs가 이 값을 어댑터의 persistState로 넘겨 dev 서버가
     // 개발용 실데이터 D1(.wrangler/state) 대신 E2E 픽스처 DB를 보게 한다. 이 경로에 스키마와
     // 픽스처를 심는 것은 scripts/seed-e2e.mjs이고, 그 스크립트는 playwright가 webServer를
     // 띄우기 전에 끝나 있어야 한다(package.json의 test:e2e 참고).
-    env: { CLAUDECODE: "", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
+    env: { ASTRO_DEV_BACKGROUND: "0", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
   },
 });
