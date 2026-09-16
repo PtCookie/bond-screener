@@ -1,6 +1,6 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 import { DASH, deltaTone, fmtDelta, fmtPrice, fmtRate } from "@/lib/screener/format";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 interface LatestPriceRow {
   mrktCtg: string | null;

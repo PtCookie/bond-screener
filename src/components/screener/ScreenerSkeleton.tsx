@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 /**
  * 스크리너 표의 로딩 스켈레톤 중 **셀 단위 조각**만 담는다. 행·표 모양은

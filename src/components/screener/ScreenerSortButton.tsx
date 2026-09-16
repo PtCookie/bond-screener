@@ -1,6 +1,6 @@
 import { CaretDownIcon, CaretUpDownIcon, CaretUpIcon } from "@phosphor-icons/react";
 import { flexRender, type Header } from "@tanstack/react-table";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import type { screenerFeatures } from "./columns";
 import type { ScreenerRow } from "@/lib/screener/types";
 

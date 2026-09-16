@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { countActiveFilters, type ScreenerFilterOptions, type ScreenerFilters } from "@/lib/screener/filters";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import type { FilterPreset } from "@/lib/screener/presets";
 import type { ScreenerStatus } from "@/lib/screener/types";
 import { ScreenerFilterMultiSelect } from "./ScreenerFilterMultiSelect";

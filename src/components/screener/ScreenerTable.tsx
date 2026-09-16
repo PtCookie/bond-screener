@@ -2,7 +2,7 @@ import type { MouseEvent, CSSProperties } from "react";
 import type { Header, ReactTable, Row } from "@tanstack/react-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { ScreenerEmpty } from "./ScreenerEmpty";
 import { ScreenerSkeletonBar, skeletonRowCount } from "./ScreenerSkeleton";
 import { ariaSortOf, ScreenerSortButton } from "./ScreenerSortButton";

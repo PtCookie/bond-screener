@@ -1,6 +1,6 @@
 import { CaretDown } from "@phosphor-icons/react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import type { BondDetailField } from "@/lib/bond/detail";
 import { ALL_BOND_FIELD_SPECS, CURATED_BOND_KEYS, formatDetailField } from "@/lib/bond/detail-view";
 
