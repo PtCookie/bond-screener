@@ -6,12 +6,13 @@ import { cn } from "@/lib/utils";
 import { ScreenerEmpty } from "./ScreenerEmpty";
 import { ScreenerSkeletonBar, skeletonRowCount } from "./ScreenerSkeleton";
 import { ScreenerSortButton } from "./ScreenerSortButton";
-import type { screenerFeatures } from "./columns";
+import { MOBILE_DATA_COLUMN_ORDER, MOBILE_GROUP_START_COLUMN, type screenerFeatures } from "./columns";
 import type { ScreenerRow } from "@/lib/screener/types";
 
 type ScreenerReactTable = ReactTable<typeof screenerFeatures, ScreenerRow>;
 type ScreenerRowModel = Row<typeof screenerFeatures, ScreenerRow>;
 type ScreenerHeaderCell = Header<typeof screenerFeatures, ScreenerRow, unknown>;
+type ScreenerColumn = ScreenerHeaderCell["column"];
 
 interface ScreenerTableProps {
   table: ScreenerReactTable;
@@ -65,6 +66,31 @@ function cellMetaClass(header: ScreenerHeaderCell): string {
   );
 }
 
+/**
+ * 모바일 데이터 컬럼(종목명 제외)을 `MOBILE_DATA_COLUMN_ORDER` 순서로 재배열한다. 헤더 행과
+ * 데이터 셀 양쪽에서 쓰므로 `column.id`만 있으면 되는 제네릭으로 둔다. 목록에 없는 컬럼(새
+ * 컬럼 추가 시)은 끝에 그대로 덧붙인다 — 재배열 목록을 깜빡 갱신하지 않아도 모바일에서
+ * 조용히 사라지지 않는다.
+ */
+function orderForMobile<T extends { column: { id: string } }>(items: T[]): T[] {
+  const byId = new Map(items.map((item) => [item.column.id, item]));
+  const ordered = MOBILE_DATA_COLUMN_ORDER.map((id) => byId.get(id)).filter((item): item is T => item !== undefined);
+  const orderedIds = new Set(ordered.map((item) => item.column.id));
+  return [...ordered, ...items.filter((item) => !orderedIds.has(item.column.id))];
+}
+
+/**
+ * 모바일 재배열 후의 정렬/구분선 클래스. 데스크톱의 `cellMetaClass`와 달리 구분선은
+ * `meta.groupStart`가 아니라 `MOBILE_GROUP_START_COLUMN`(재배열된 "핵심 3열"과 나머지의
+ * 경계) 기준이다 — 재배열된 순서에서는 `meta.groupStart`가 더 이상 그 경계와 일치하지 않는다.
+ */
+function mobileMetaClass(column: ScreenerColumn): string {
+  return cn(
+    column.columnDef.meta?.align === "end" && "text-right",
+    column.id === MOBILE_GROUP_START_COLUMN && "border-l",
+  );
+}
+
 function handleRowClick(e: MouseEvent<HTMLTableRowElement>, row: ScreenerRowModel): void {
   if ((e.target as HTMLElement).closest("a, button")) return;
   window.location.href = `/bond/${row.original.isinCd}`;
@@ -92,7 +118,10 @@ function DesktopSkeletonRows({ headers, count }: { headers: ScreenerHeaderCell[]
   ));
 }
 
-/** 모바일 스켈레톤 — 실제 모바일 레이아웃과 같이 종목당 2행(이름 행 + 데이터 행)을 낸다. */
+/**
+ * 모바일 스켈레톤 — 실제 모바일 레이아웃과 같이 종목당 2행(이름 행 + 데이터 행)을 낸다.
+ * `dataHeaders`는 호출부(`MobileTable`)가 이미 `orderForMobile`로 재배열해 넘긴다.
+ */
 function MobileSkeletonRows({ dataHeaders, count }: { dataHeaders: ScreenerHeaderCell[]; count: number }) {
   return Array.from({ length: count }, (_, b) => [
     <TableRow key={`sk-${b}-name`} data-slot="screener-skeleton-row" aria-hidden="true" className="border-b-0">
@@ -104,7 +133,7 @@ function MobileSkeletonRows({ dataHeaders, count }: { dataHeaders: ScreenerHeade
     </TableRow>,
     <TableRow key={`sk-${b}-data`} data-slot="screener-skeleton-row" aria-hidden="true">
       {dataHeaders.map((header, idx) => (
-        <TableCell key={header.id} className={cellMetaClass(header)}>
+        <TableCell key={header.id} className={mobileMetaClass(header.column)}>
           <ScreenerSkeletonBar rowIdx={b} colIdx={idx + 1} align={header.column.columnDef.meta?.align} />
         </TableCell>
       ))}
@@ -195,7 +224,10 @@ function MobileTable({
   isLoading: boolean;
 }) {
   const headers = table.getHeaderGroups()[0]?.headers ?? [];
-  const [nameHeader, ...dataHeaders] = headers;
+  const [nameHeader, ...rawDataHeaders] = headers;
+  // 데스크톱 컬럼 순서 그대로 두면 종류·발행일·표면이율이 앞을 차지해 시세 값이 가로 스크롤
+  // 너머로 밀려난다(ui-audit ⑨) — 모바일에서만 "핵심 3열"(만기일·종가·수익률)을 앞으로 뺀다.
+  const dataHeaders = orderForMobile(rawDataHeaders);
   const dataColCount = dataHeaders.length;
   const minWidth = sumColWidths(dataHeaders.map((h) => h.column.columnDef.meta?.width));
 
@@ -223,14 +255,7 @@ function MobileTable({
         </TableRow>
         <TableRow>
           {dataHeaders.map((header) => (
-            <TableHead
-              key={header.id}
-              className={cn(
-                STICKY_HEADER_ROW2,
-                header.column.columnDef.meta?.align === "end" && "text-right",
-                header.column.columnDef.meta?.groupStart && "border-l",
-              )}
-            >
+            <TableHead key={header.id} className={cn(STICKY_HEADER_ROW2, mobileMetaClass(header.column))}>
               <ScreenerSortButton header={header} />
             </TableHead>
           ))}
@@ -244,7 +269,8 @@ function MobileTable({
           />
         ) : (
           rows.map((row) => {
-            const [nameCell, ...dataCells] = row.getAllCells();
+            const [nameCell, ...rawDataCells] = row.getAllCells();
+            const dataCells = orderForMobile(rawDataCells);
             return [
               <TableRow
                 key={`${row.id}-name`}
@@ -269,8 +295,8 @@ function MobileTable({
                     key={cell.id}
                     className={cn(
                       "truncate",
-                      cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
-                      cell.column.columnDef.meta?.groupStart && "border-l",
+                      mobileMetaClass(cell.column),
+                      cell.column.columnDef.meta?.align === "end" && "tabular-nums",
                     )}
                   >
                     <table.FlexRender cell={cell} />

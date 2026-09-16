@@ -4,12 +4,18 @@
  * (1) 필터 선택지는 필터 결과가 아니라 원본 전체 기준, (2) 필터 변경 시 페이지가
  * 1페이지로 리셋, (3) fetch 실패 시 에러 화면과 재시도.
  */
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import { page, userEvent } from "vitest/browser";
 import { BondScreener } from "@/components/screener/BondScreener";
 import { stubFetch } from "../../helpers/fetch-stub";
 import { makeSnapshotIndex, makeSnapshotPayload, type SnapshotFixtureBond } from "../../helpers/snapshot-fixture";
+
+// Vitest Browser Mode의 기본 뷰포트(414×896)는 md(768px) 미만이라 모바일 갈래로 렌더된다 —
+// 이 파일의 테스트는 전부 데스크톱 레이아웃(칩이 항상 펼쳐진 ScreenerFilterBar)을 가정한다.
+beforeEach(async () => {
+  await page.viewport(1200, 800);
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();

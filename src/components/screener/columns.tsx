@@ -155,3 +155,29 @@ export const screenerColumns = helper.columns([
     meta: { align: "end", width: 6 },
   }),
 ]);
+
+/**
+ * 모바일 데이터 행(종목명 제외)의 표시 순서 — 375px에서는 앞 3칸만 실제로 보인다
+ * (만기일 8 + 종가 6 + 수익률 6rem = 320px). 데스크톱 컬럼 순서(위 정의)를 그대로 쓰면
+ * 종류·발행일·표면이율이 앞을 차지해 시세 값이 가로 스크롤 너머로 밀려난다(ui-audit ⑨).
+ * `ScreenerTable.tsx`의 `orderForMobile`이 이 순서로 헤더·셀을 재배열한다.
+ */
+export const MOBILE_DATA_COLUMN_ORDER = [
+  "bondExprDt",
+  "clprPrc",
+  "clprBnfRt",
+  "kisGrade",
+  "clprVs",
+  "bondSrfcInrt",
+  "scrsItmsKcdNm",
+  "bondIntTcdNm",
+  "trqu",
+  "bondIssuDt",
+];
+
+/**
+ * 모바일 재배열 후 구분선을 긋는 컬럼 — 위 순서의 "핵심 3열"(만기일·종가·수익률)과
+ * 나머지를 가른다. 데스크톱의 `meta.groupStart`(종가, 시세 그룹 기준)는 재배열된 순서에서는
+ * 더 이상 의미가 없으므로(가격/시세/정적 필드가 뒤섞여 나온다) 여기서 별도로 정한다.
+ */
+export const MOBILE_GROUP_START_COLUMN = "kisGrade";

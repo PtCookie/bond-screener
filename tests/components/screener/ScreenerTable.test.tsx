@@ -7,7 +7,7 @@ import { describe, expect, test } from "vitest";
 import { useTable, type PaginationState, type SortingState } from "@tanstack/react-table";
 import { render } from "vitest-browser-react";
 import { page } from "vitest/browser";
-import { screenerColumns, screenerFeatures } from "@/components/screener/columns";
+import { MOBILE_DATA_COLUMN_ORDER, screenerColumns, screenerFeatures } from "@/components/screener/columns";
 import { ScreenerTable } from "@/components/screener/ScreenerTable";
 import type { ScreenerRow } from "@/lib/screener/types";
 import { makeScreenerRow } from "../../helpers/screener-row";
@@ -114,6 +114,42 @@ describe("ScreenerTable", () => {
 
     await expect.poll(() => screen.container.querySelectorAll("tbody tr").length).toBe(6);
     await page.viewport(1200, 800); // 다음 테스트에 영향 없도록 되돌린다.
+  });
+
+  // ui-audit ⑨ — 375px에서는 앞 3칸만 실제로 보이므로, 데스크톱 컬럼 순서(종류·발행일·표면이율…)
+  // 그대로 두면 시세 값이 가로 스크롤 너머로 밀려난다. 모바일에서만 만기일·종가·수익률을 앞으로 뺀다.
+  test("모바일 헤더 2행은 만기일·종가·수익률 순으로 재배열된다", async () => {
+    await page.viewport(390, 800);
+    const screen = await render(<Harness rows={makeRows(1)} />);
+    await expect.element(screen.getByText("테스트채권0")).toBeInTheDocument();
+
+    const headerTexts = Array.from(screen.container.querySelectorAll("thead tr:nth-child(2) th")).map((th) =>
+      th.textContent?.trim(),
+    );
+    expect(headerTexts.slice(0, 3)).toEqual(["만기일", "종가", "수익률"]);
+    await page.viewport(1200, 800); // 다음 테스트에 영향 없도록 되돌린다.
+  });
+
+  test("모바일 데이터 행도 헤더와 같은 순서로 재배열된다", async () => {
+    await page.viewport(390, 800);
+    // bondExprDt=20250101 → "2025-01-01", clprPrc=10000 → "10,000", clprBnfRt=3.2 → "3.200%"
+    // (makeScreenerRow 기본값, tests/helpers/screener-row.ts).
+    const screen = await render(<Harness rows={makeRows(1)} />);
+    await expect.element(screen.getByText("테스트채권0")).toBeInTheDocument();
+
+    // 종목당 2행(이름 행 + 데이터 행) — 두 번째 tr이 데이터 행이다.
+    const cellTexts = Array.from(screen.container.querySelectorAll("tbody tr:nth-child(2) td")).map((td) =>
+      td.textContent?.trim(),
+    );
+    expect(cellTexts.slice(0, 3)).toEqual(["2025-01-01", "10,000", "3.200%"]);
+    await page.viewport(1200, 800); // 다음 테스트에 영향 없도록 되돌린다.
+  });
+
+  // 재배열 목록을 깜빡 갱신하지 않아도 모바일에서 컬럼이 조용히 사라지지 않는지 정적으로 가드한다.
+  test("MOBILE_DATA_COLUMN_ORDER는 종목명을 제외한 전체 컬럼과 정확히 일치한다", () => {
+    const allDataColumnIds = screenerColumns.slice(1).map((col) => (col as { accessorKey: string }).accessorKey);
+    expect(new Set(MOBILE_DATA_COLUMN_ORDER)).toEqual(new Set(allDataColumnIds));
+    expect(MOBILE_DATA_COLUMN_ORDER).toHaveLength(allDataColumnIds.length);
   });
 
   // 행 클릭 → window.location.href 대입 → 실제 상세 페이지 이동은 여기서 검증하지 않는다.
