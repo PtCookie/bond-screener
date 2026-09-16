@@ -5,7 +5,7 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "@/lib/utils";
 import { ScreenerEmpty } from "./ScreenerEmpty";
 import { ScreenerSkeletonBar, skeletonRowCount } from "./ScreenerSkeleton";
-import { ScreenerSortButton } from "./ScreenerSortButton";
+import { ariaSortOf, ScreenerSortButton } from "./ScreenerSortButton";
 import { MOBILE_DATA_COLUMN_ORDER, MOBILE_GROUP_START_COLUMN, type screenerFeatures } from "./columns";
 import type { ScreenerRow } from "@/lib/screener/types";
 
@@ -173,6 +173,7 @@ function DesktopTable({
             {headerGroup.headers.map((header, idx) => (
               <TableHead
                 key={header.id}
+                aria-sort={ariaSortOf(header)}
                 className={cn(
                   idx === 0 && STICKY_FIRST_COL,
                   STICKY_HEADER,
@@ -245,7 +246,7 @@ function MobileTable({
       </colgroup>
       <TableHeader>
         <TableRow>
-          <TableHead colSpan={dataColCount} className={STICKY_HEADER}>
+          <TableHead colSpan={dataColCount} aria-sort={nameHeader && ariaSortOf(nameHeader)} className={STICKY_HEADER}>
             {nameHeader && (
               <div className={cn("sticky left-0", MOBILE_NAME_MAX_WIDTH)}>
                 <ScreenerSortButton header={nameHeader} />
@@ -255,7 +256,11 @@ function MobileTable({
         </TableRow>
         <TableRow>
           {dataHeaders.map((header) => (
-            <TableHead key={header.id} className={cn(STICKY_HEADER_ROW2, mobileMetaClass(header.column))}>
+            <TableHead
+              key={header.id}
+              aria-sort={ariaSortOf(header)}
+              className={cn(STICKY_HEADER_ROW2, mobileMetaClass(header.column))}
+            >
               <ScreenerSortButton header={header} />
             </TableHead>
           ))}

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { describe, expect, test } from "vitest";
 import { useTable, type PaginationState, type SortingState } from "@tanstack/react-table";
 import { render } from "vitest-browser-react";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { MOBILE_DATA_COLUMN_ORDER, screenerColumns, screenerFeatures } from "@/components/screener/columns";
 import { ScreenerTable } from "@/components/screener/ScreenerTable";
 import type { ScreenerRow } from "@/lib/screener/types";
@@ -142,6 +142,45 @@ describe("ScreenerTable", () => {
       td.textContent?.trim(),
     );
     expect(cellTexts.slice(0, 3)).toEqual(["2025-01-01", "10,000", "3.200%"]);
+    await page.viewport(1200, 800); // 다음 테스트에 영향 없도록 되돌린다.
+  });
+
+  // ui-audit ⑦ — 방향 표시가 phosphor 캐럿 svg뿐이라 스크린리더에는 정렬 상태가 전혀
+  // 전달되지 않았다. 아이콘이 아니라 <th aria-sort>가 정본이다.
+  test("데스크톱 th의 aria-sort가 클릭에 따라 none → 방향 → none으로 순환한다", async () => {
+    await page.viewport(1200, 800);
+    const screen = await render(<Harness rows={makeRows(3)} />);
+    await expect.element(screen.getByText("테스트채권0")).toBeInTheDocument();
+
+    const sortStates = () => Array.from(screen.container.querySelectorAll("thead th")).map((th) => th.ariaSort);
+
+    // screenerColumns는 11컬럼 전부 정렬 가능하므로 전부 "none"에서 시작한다.
+    expect(sortStates()).toEqual(Array(screenerColumns.length).fill("none"));
+
+    const header = screen.getByRole("button", { name: "표면이율" });
+    await userEvent.click(header);
+    // 정렬이 걸린 th는 정확히 하나여야 한다(aria-sort 규약).
+    await expect.poll(() => sortStates().filter((v) => v !== "none")).toHaveLength(1);
+    const first = sortStates().find((v) => v !== "none");
+    expect(first === "ascending" || first === "descending").toBe(true);
+
+    await userEvent.click(header);
+    await expect.poll(() => sortStates().find((v) => v !== "none")).not.toBe(first);
+
+    await userEvent.click(header);
+    await expect.poll(() => sortStates().every((v) => v === "none")).toBe(true);
+  });
+
+  test("모바일에서도 헤더 2행 th에 aria-sort가 붙는다", async () => {
+    await page.viewport(390, 800);
+    const screen = await render(<Harness rows={makeRows(1)} />);
+    await expect.element(screen.getByText("테스트채권0")).toBeInTheDocument();
+
+    const dataHeaders = Array.from(screen.container.querySelectorAll("thead tr:nth-child(2) th"));
+    expect(dataHeaders.map((th) => th.ariaSort)).toEqual(Array(dataHeaders.length).fill("none"));
+    // 1행(종목명, colSpan)도 정렬 가능한 헤더라 같은 규약을 따른다.
+    expect(screen.container.querySelector("thead tr:nth-child(1) th")?.ariaSort).toBe("none");
+
     await page.viewport(1200, 800); // 다음 테스트에 영향 없도록 되돌린다.
   });
 

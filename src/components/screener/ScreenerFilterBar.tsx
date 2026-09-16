@@ -54,9 +54,12 @@ export function ScreenerFilterBar({
     onFiltersChange((prev) => ({ ...prev, ...partial }));
   }
 
-  // 검색창은 데스크톱에서만 폭을 w-56으로 고정한다 — 모바일은 남는 폭을 그대로 쓴다(⑩ 모바일 절반 해소).
+  // 검색창은 어느 폭에서도 남는 공간을 쓴다(ui-audit ⑩) — 구 w-56(224px)은 pl-9를 빼면 텍스트
+  // 영역이 188px뿐이라 placeholder가 잘렸다. 데스크톱에는 하한(14rem)과 상한(24rem)만 둔다:
+  // 상한이 없으면 자라난 검색창이 그 flex 줄의 남는 공간을 다 먹어 같은 줄의 건수 배지가
+  // ml-auto로 우측 정렬되지 못한다(auto margin은 grow가 끝난 뒤 남은 공간만 쓴다).
   const searchInput = (
-    <div className="relative min-w-0 flex-1 md:max-w-56 md:flex-none">
+    <div className="relative min-w-0 flex-1 md:max-w-sm md:min-w-56">
       <MagnifyingGlassIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
       <Input
         value={filters.q}

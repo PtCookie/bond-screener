@@ -57,7 +57,7 @@ describe("BondScreener", () => {
       .poll(() => screen.container.querySelectorAll('tbody tr[data-slot="screener-skeleton-row"]').length)
       .toBeGreaterThan(0);
 
-    await expect.element(screen.getByText("총 0건", { exact: true })).not.toBeInTheDocument();
+    await expect.element(screen.getByText("0건", { exact: true })).not.toBeInTheDocument();
     await expect.element(screen.getByText("0–0 / 전체 0건")).not.toBeInTheDocument();
     await expect.element(screen.getByText("1 / 1")).not.toBeInTheDocument();
     await expect.element(screen.getByText("기준일자 —")).not.toBeInTheDocument();
@@ -66,22 +66,22 @@ describe("BondScreener", () => {
     await expect.element(screen.getByText("채권 목록을 불러오는 중입니다.")).toBeInTheDocument();
   });
 
+  // 건수의 유일한 소유자는 ScreenerFilterBar 배지다(ui-audit ⑤) — 헤더에는 더 이상 없다.
+  // exact를 지정하지 않으면 페이지네이션의 "1–25 / 전체 30건"에도 부분일치한다.
   test("정상 로드 — 전체 건수를 표시한다", async () => {
     stubSnapshot(makeBonds());
     const screen = await render(<BondScreener />);
-    await expect.element(screen.getByText("총 30건")).toBeInTheDocument();
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
   });
 
   test("필터 선택지는 필터 결과가 아니라 원본 전체 기준으로 유지된다", async () => {
     stubSnapshot(makeBonds());
     const screen = await render(<BondScreener />);
-    await expect.element(screen.getByText("총 30건")).toBeInTheDocument();
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
 
     // 검색으로 결과를 BBB 등급 종목 1건으로 좁힌다.
     await screen.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권25");
-    // ScreenerHeader와 ScreenerFilterBar가 같은 문구 형식("N건 / 전체 M건")을 각자 표시하므로
-    // getByText가 2건에 매치한다 — .first()로 하나만 골라 존재를 확인한다.
-    await expect.element(screen.getByText("1건 / 전체 30건").first()).toBeInTheDocument();
+    await expect.element(screen.getByText("1건 / 전체 30건")).toBeInTheDocument();
 
     // 신용등급 선택지는 여전히 AAA/BBB 둘 다 보여야 한다(원본 30건 기준) — 결과가 1건으로
     // 좁혀졌다고 선택지 자체가 BBB 하나로 줄면 다중선택을 다시 넓히기 어려워진다.
@@ -101,7 +101,7 @@ describe("BondScreener", () => {
   test("2페이지로 이동한 뒤 필터를 바꾸면 1페이지로 돌아간다", async () => {
     stubSnapshot(makeBonds());
     const screen = await render(<BondScreener />);
-    await expect.element(screen.getByText("총 30건")).toBeInTheDocument();
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
     await expect.element(screen.getByText("26–30 / 전체 30건")).toBeInTheDocument();
@@ -120,6 +120,6 @@ describe("BondScreener", () => {
     stubSnapshot(makeBonds());
     await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
 
-    await expect.element(screen.getByText("총 30건")).toBeInTheDocument();
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
   });
 });

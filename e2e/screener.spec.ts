@@ -14,7 +14,9 @@ test.beforeEach(async ({ page }) => {
 test("초기 로드 — 행이 표시되고 헤더에 기준일자가 뜬다", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "채권 스크리너" })).toBeVisible();
   await expect(page.getByText(/기준일자 \d{4}-\d{2}-\d{2}/)).toBeVisible();
-  await expect(page.getByText("총 30건")).toBeVisible();
+  // 건수의 유일한 소유자는 필터 바 배지다(ui-audit ⑤) — exact가 없으면 페이지네이션의
+  // "1–25 / 전체 30건"에도 부분일치한다.
+  await expect(page.getByText("30건", { exact: true })).toBeVisible();
   // 기본 pageSize 25 — 1페이지에 25행.
   await expect(page.locator("tbody tr")).toHaveCount(25);
 });
@@ -23,7 +25,7 @@ test("검색어 입력 시 결과 수 배지와 행이 함께 줄어든다", asy
   await page.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권5");
   // "유일채권15"/"유일채권25"는 "권" 다음이 "1"/"2"라 "유일채권5"의 부분일치가 아니다 —
   // "유일채권5"(index 5) 1건만 매치한다.
-  await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("1건 / 전체 30건")).toBeVisible();
 });
 
 test("신용등급 다중선택 필터 — 팝오버를 열고 체크하면 결과가 좁혀진다", async ({ page }) => {
@@ -33,7 +35,7 @@ test("신용등급 다중선택 필터 — 팝오버를 열고 체크하면 결�
   const popover = page.locator('[data-slot="popover-content"]');
   await popover.getByText("BBB", { exact: true }).click();
   // BBB는 10건(index 20~29)이다.
-  await expect(page.getByText("10건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("10건 / 전체 30건")).toBeVisible();
 });
 
 test("만기일 범위 필터 — 최소값을 입력하면 결과가 좁혀진다", async ({ page }) => {
@@ -42,20 +44,30 @@ test("만기일 범위 필터 — 최소값을 입력하면 결과가 좁혀진�
   await page.getByRole("button", { name: "만기일", exact: true }).first().click();
   // bondExprDt = 20270101 + i(0~29) → 20270115 이상이면 index 14~29(16건).
   await page.getByLabel("만기일 최소").fill("2027-01-15");
-  await expect(page.getByText("16건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("16건 / 전체 30건")).toBeVisible();
 });
 
 test("헤더 클릭 정렬이 3-state로 순환한다", async ({ page }) => {
   // 필터 바의 "표면이율(%)" 트리거는 부분일치로도 "표면이율"에 매치하므로 exact로 구분한다.
   const header = page.getByRole("button", { name: "표면이율", exact: true });
   const firstRowCell = page.locator("tbody tr").first().locator("td").nth(4); // 표면이율 컬럼
+  // ui-audit ⑦ — 정렬 상태의 정본은 캐럿 아이콘이 아니라 <th aria-sort>다.
+  const sortedTh = page.locator('thead th[aria-sort="ascending"], thead th[aria-sort="descending"]');
+
+  await expect(sortedTh).toHaveCount(0);
 
   await header.click();
   const afterFirstClick = await firstRowCell.textContent();
+  await expect(sortedTh).toHaveCount(1);
 
   await header.click();
   const afterSecondClick = await firstRowCell.textContent();
   expect(afterSecondClick).not.toBe(afterFirstClick);
+  await expect(sortedTh).toHaveCount(1);
+
+  // 3번째 클릭에서 해제 — 방향이 붙은 th가 하나도 없어야 한다.
+  await header.click();
+  await expect(sortedTh).toHaveCount(0);
 });
 
 test("페이지네이션 — 다음 페이지 이동과 pageSize 변경", async ({ page }) => {
@@ -73,7 +85,7 @@ test("초기화 버튼 — 전체 목록으로 복귀하고 URL 쿼리가 사라
 
   await page.getByRole("button", { name: "초기화" }).click();
   await expect.poll(() => new URL(page.url()).search).toBe("");
-  await expect(page.getByText("총 30건")).toBeVisible();
+  await expect(page.getByText("30건", { exact: true })).toBeVisible();
 });
 
 test("상태 지속성 — 필터·정렬·페이지를 바꾼 뒤 리로드해도 URL 쿼리로 복원된다", async ({ page }) => {
@@ -102,7 +114,7 @@ test("상태 지속성 — 쿼리 없이 재진입해도 sessionStorage로 복�
 
 test("필터 프리셋 — 이름 붙여 저장하면 리로드 후에도 남고, 클릭하면 필터가 복원된다", async ({ page }) => {
   await page.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권7");
-  await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("1건 / 전체 30건")).toBeVisible();
 
   // 트리거의 접근성 이름에는 저장된 개수가 붙는다("저장된 필터 1") — 정규식으로 받는다.
   const presetTrigger = page.getByRole("button", { name: /저장된 필터/ });
@@ -118,29 +130,29 @@ test("필터 프리셋 — 이름 붙여 저장하면 리로드 후에도 남고
   // localStorage는 리로드를 넘어 남는다(sessionStorage 기반 뷰 상태와 달리 세션도 넘는다).
   await page.reload();
   await page.getByRole("button", { name: "초기화" }).click();
-  await expect(page.getByText("총 30건")).toBeVisible();
+  await expect(page.getByText("30건", { exact: true })).toBeVisible();
 
   await presetTrigger.click();
   await popover.getByRole("button", { name: "내 프리셋", exact: true }).click();
 
   await expect(page.getByPlaceholder("종목명·발행인·ISIN 검색")).toHaveValue("유일채권7");
-  await expect(page.getByText("1건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("1건 / 전체 30건")).toBeVisible();
   await expect(page).toHaveURL(/q=/);
 });
 
 test("필터별 해제 — 신용등급만 비우고 검색어 필터는 유지된다", async ({ page }) => {
   await page.getByPlaceholder("종목명·발행인·ISIN 검색").fill("유일채권2");
   // "유일채권2"/"유일채권20"~"유일채권29" 11건 중 BBB(index 20~29)는 10건이다.
-  await expect(page.getByText("11건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("11건 / 전체 30건")).toBeVisible();
 
   const popover = page.locator('[data-slot="popover-content"]');
   await page.getByRole("button", { name: "신용등급 전체" }).click();
   await popover.getByText("BBB", { exact: true }).click();
-  await expect(page.getByText("10건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("10건 / 전체 30건")).toBeVisible();
 
   await popover.getByRole("button", { name: "신용등급 해제" }).click();
   // 신용등급만 비었고 검색어는 그대로다 — 필터 바의 "초기화"와 달리 전체를 되돌리지 않는다.
   await expect(page.getByRole("button", { name: "신용등급 전체" })).toBeVisible();
-  await expect(page.getByText("11건 / 전체 30건").first()).toBeVisible();
+  await expect(page.getByText("11건 / 전체 30건")).toBeVisible();
   await expect(page).toHaveURL(/q=/);
 });
