@@ -16,36 +16,29 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./e2e",
+  /* Run tests in files in parallel */
   fullyParallel: true,
+  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
+  /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
+  /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
-  reporter: process.env.CI ? [["html"], ["github"]] : "list",
+  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  // The html report only exists as a downloadable artifact on CI; `github` is what puts a failure
+  // inline on the commit/PR, where it's actually seen. `open: "never"` keeps the reporter from
+  // trying to serve the report and hanging the job.
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "html",
+  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
+    /* Base URL to use in actions like `await page.goto('')`. */
     baseURL: "http://localhost:4321",
+
+    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: "on-first-retry",
   },
 
-  webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:4321",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    // Astro 7.2({astro}/dist/cli/agent.js)는 `am-i-vibing`으로 "AI 에이전트가 실행 중인지"를
-    // CLAUDECODE 등 환경변수로 감지해, 감지되면 `--background` 없이도 dev 서버를 자동으로
-    // 백그라운드 데몬으로 띄우고 launcher 프로세스는 즉시 종료한다(실측 확인: Claude Code
-    // 세션에서 `astro dev`를 아무 플래그 없이 실행해도 상태 메시지만 찍고 바로 끝난다).
-    // Playwright는 command가 계속 살아있는 포그라운드 프로세스라고 가정하므로, 이 자동
-    // 백그라운드 전환을 "Process from config.webServer exited early"로 오인해 실패한다.
-    // CLAUDECODE를 빈 문자열로 지워(`checkEnvVar`가 Boolean() 판정이라 빈 문자열은
-    // falsy) 감지를 끄면 정상적인 포그라운드 프로세스로 뜬다.
-    // E2E_PERSIST_PATH: astro.config.mjs가 이 값을 어댑터의 persistState로 넘겨 dev 서버가
-    // 개발용 실데이터 D1(.wrangler/state) 대신 E2E 픽스처 DB를 보게 한다. 이 경로에 스키마와
-    // 픽스처를 심는 것은 scripts/seed-e2e.mjs이고, 그 스크립트는 playwright가 webServer를
-    // 띄우기 전에 끝나 있어야 한다(package.json의 test:e2e 참고).
-    env: { CLAUDECODE: "", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
-  },
-
+  /* Configure projects for major browsers */
   projects: [
     {
       name: "chromium",
@@ -65,4 +58,25 @@ export default defineConfig({
         ]
       : []),
   ],
+
+  /* Run your local dev server before starting the tests */
+  webServer: {
+    command: "pnpm run dev",
+    url: "http://localhost:4321",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    // Astro 7.2({astro}/dist/cli/agent.js)는 `am-i-vibing`으로 "AI 에이전트가 실행 중인지"를
+    // CLAUDECODE 등 환경변수로 감지해, 감지되면 `--background` 없이도 dev 서버를 자동으로
+    // 백그라운드 데몬으로 띄우고 launcher 프로세스는 즉시 종료한다(실측 확인: Claude Code
+    // 세션에서 `astro dev`를 아무 플래그 없이 실행해도 상태 메시지만 찍고 바로 끝난다).
+    // Playwright는 command가 계속 살아있는 포그라운드 프로세스라고 가정하므로, 이 자동
+    // 백그라운드 전환을 "Process from config.webServer exited early"로 오인해 실패한다.
+    // CLAUDECODE를 빈 문자열로 지워(`checkEnvVar`가 Boolean() 판정이라 빈 문자열은
+    // falsy) 감지를 끄면 정상적인 포그라운드 프로세스로 뜬다.
+    // E2E_PERSIST_PATH: astro.config.mjs가 이 값을 어댑터의 persistState로 넘겨 dev 서버가
+    // 개발용 실데이터 D1(.wrangler/state) 대신 E2E 픽스처 DB를 보게 한다. 이 경로에 스키마와
+    // 픽스처를 심는 것은 scripts/seed-e2e.mjs이고, 그 스크립트는 playwright가 webServer를
+    // 띄우기 전에 끝나 있어야 한다(package.json의 test:e2e 참고).
+    env: { CLAUDECODE: "", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
+  },
 });
