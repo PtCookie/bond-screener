@@ -17,6 +17,8 @@ const { createChartMock, seriesMock, chartMock, fitContentMock } = vi.hoisted(()
   const seriesMock = { applyOptions: vi.fn(), setData: vi.fn() };
   const chartMock = {
     addSeries: vi.fn(() => seriesMock),
+    // 테마 effect가 마운트 시 바로 호출한다 — 스텁이 없으면 렌더가 던진다.
+    applyOptions: vi.fn(),
     remove: vi.fn(),
     timeScale: vi.fn(() => ({ fitContent: fitContentMock })),
   };
@@ -66,9 +68,29 @@ describe("PriceChart (모킹 — 상호작용)", () => {
     const screen = await render(<PriceChart points={POINTS} metric="price" />);
     seriesMock.applyOptions.mockClear();
     await screen.rerender(<PriceChart points={POINTS} metric="yield" />);
-    expect(seriesMock.applyOptions).toHaveBeenLastCalledWith({
+    // 테마 effect도 series.applyOptions({ color })를 호출하므로 "마지막 호출"로 단언하면
+    // effect 선언 순서에 의존하게 된다 — 이 호출이 있었는지만 본다.
+    expect(seriesMock.applyOptions).toHaveBeenCalledWith({
       priceFormat: { type: "percent", precision: 3, minMove: 0.001 },
     });
+  });
+
+  test("테마가 바뀌면 차트·시리즈 색을 다시 읽어 적용한다", async () => {
+    const screen = await render(<PriceChart points={POINTS} metric="price" />);
+    chartMock.applyOptions.mockClear();
+    seriesMock.applyOptions.mockClear();
+
+    document.documentElement.classList.add("dark");
+    // `.dark` 변경은 MutationObserver를 거쳐 통지되므로 리렌더를 기다린다(setup-browser.ts의
+    // afterEach가 클래스를 되돌린다).
+    await expect.poll(() => chartMock.applyOptions.mock.calls.length).toBeGreaterThan(0);
+
+    expect(chartMock.applyOptions.mock.calls.at(-1)?.[0]).toMatchObject({
+      layout: { textColor: expect.stringMatching(/^rgba\(/) },
+    });
+    expect(seriesMock.applyOptions).toHaveBeenCalledWith({ color: expect.stringMatching(/^rgba\(/) });
+
+    await screen.unmount();
   });
 
   test("값이 null인 포인트는 setData에서 제외된다", async () => {

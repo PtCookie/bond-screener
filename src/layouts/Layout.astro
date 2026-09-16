@@ -19,6 +19,47 @@ const { title = "채권 스크리너", description = "공공데이터포털 채�
     <link rel="icon" href="/favicon.ico" />
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
+
+    <!-- 테마(내용은 src/lib/theme.ts의 applyTheme과 손으로 동기화한다) -->
+    <meta name="theme-color" id="theme-color-meta" content="oklch(1 0 0)" />
+    <script is:inline data-theme-init>
+      {
+        // **`is:inline`을 떼지 말 것.** 떼면 Astro가 이 스크립트를 번들해 별도 파일의
+        // `type="module"`(= defer)로 바꾸는데, defer는 첫 페인트 뒤에 실행되므로 다크 사용자는
+        // 페이지를 열 때마다 흰 화면이 번쩍인 뒤 어두워진다. 그 대가로 import를 쓸 수 없어
+        // src/lib/theme.ts의 해소식을 여기 중복 구현한다 — 한쪽을 고치면 다른 쪽도 고칠 것.
+        //
+        // 이 저장소에는 <ClientRouter />가 없다(MPA, 매 이동이 전체 리로드). www와 달리
+        // `astro:after-swap` 재적용이 필요 없는 이유다.
+        //
+        // 바깥의 `{ ... }` 블록은 선언을 전역에서 격리한다.
+        const THEME_COLOR = { light: "oklch(1 0 0)", dark: "oklch(0.148 0.004 228.8)" };
+
+        let pref = "system";
+        try {
+          const stored = localStorage.getItem("bond-screener:theme");
+          if (stored === "system" || stored === "light" || stored === "dark") pref = stored;
+        } catch {
+          // 저장소가 막히면(프라이빗 모드·파티션된 스토리지) getItem 호출 자체가 던진다 —
+          // OS 설정으로 폴백한다.
+        }
+
+        const isDark = pref === "dark" || (pref === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = pref;
+        document.documentElement.classList.toggle("dark", isDark);
+        document
+          .getElementById("theme-color-meta")
+          ?.setAttribute("content", isDark ? THEME_COLOR.dark : THEME_COLOR.light);
+      }
+    </script>
+    <noscript>
+      <style>
+        /* JS 없이는 동작하지 않는 컨트롤(테마 토글)을 아예 숨긴다. */
+        [data-js-only] {
+          display: none !important;
+        }
+      </style>
+    </noscript>
   </head>
   <body class="bg-background text-foreground min-h-dvh">
     <slot />

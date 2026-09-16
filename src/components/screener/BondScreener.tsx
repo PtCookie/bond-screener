@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useMemo } from "react";
 import { useTable, type PaginationState } from "@tanstack/react-table";
+import { AppHeader } from "@/components/layout/AppHeader";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { useScreenerViewState } from "@/hooks/useScreenerViewState";
 import { useScreenerData } from "@/hooks/useScreenerData";
@@ -10,7 +11,6 @@ import type { ScreenerRow, ScreenerStatus } from "@/lib/screener/types";
 import { screenerColumns, screenerFeatures } from "./columns";
 import { ScreenerError } from "./ScreenerError";
 import { ScreenerFilterBar } from "./ScreenerFilterBar";
-import { ScreenerHeader } from "./ScreenerHeader";
 import { ScreenerPagination } from "./ScreenerPagination";
 import { ScreenerTable } from "./ScreenerTable";
 
@@ -70,11 +70,14 @@ function BondScreenerInner() {
     <div className="space-y-4">
       {/* 시세 기준일(priceBasDt)이 사용자에게 의미 있는 "오늘 화면에 보이는 날짜"라 우선한다 —
           bond 정적 필드 기준일(basDt)은 시세보다 갱신이 드물다(주 1회). */}
-      <ScreenerHeader
-        basDt={data?.priceBasDt ?? data?.basDt ?? null}
-        filteredCount={filteredRows.length}
-        totalCount={rows.length}
-        status={status}
+      <AppHeader
+        title="채권 스크리너"
+        summary={{
+          basDt: data?.priceBasDt ?? data?.basDt ?? null,
+          filteredCount: filteredRows.length,
+          totalCount: rows.length,
+          status,
+        }}
       />
       {/* 스켈레톤 행은 aria-hidden이라 로딩 사실을 AT에 알리는 건 이 리전 하나다.
           조건부 마운트가 아니라 항상 마운트하고 텍스트만 교체한다 — 리전이 내용과 동시에
