@@ -3,7 +3,7 @@ import type { ReactTable } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PAGE_SIZE_OPTIONS } from "@/lib/screener/view-state";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import type { screenerFeatures } from "./columns";
 import type { ScreenerRow, ScreenerStatus } from "@/lib/screener/types";
 

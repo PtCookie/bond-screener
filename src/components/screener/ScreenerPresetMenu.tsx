@@ -10,7 +10,7 @@ import {
   normalizePresetName,
   type FilterPreset,
 } from "@/lib/screener/presets";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 interface ScreenerPresetMenuProps {
   presets: FilterPreset[];

@@ -27,3 +27,24 @@ test("종목명 열이 가로 스크롤 중에도 sticky로 남는다", async ({
   const nameCell = page.getByText("유일채권0").locator("..");
   await expect(nameCell).toHaveCSS("position", "sticky");
 });
+
+// ui-audit ⑧ — 375px에서 필터 칩 전부를 펼쳐두면 4줄(~340px)이 sticky로 화면을 영구
+// 점유한다. 접힌 패널로 감싸 검색창·토글·건수만 담은 한 줄만 보이는지 확인한다.
+test("필터 칩은 기본적으로 접혀 있고, 토글을 누르면 펼쳐진다", async ({ page }) => {
+  await mockSnapshot(page, makeBonds(3));
+  await page.goto("/");
+
+  await expect(page.getByRole("button", { name: "신용등급 전체" })).not.toBeVisible();
+  await page.getByRole("button", { name: "필터", exact: true }).click();
+  await expect(page.getByRole("button", { name: "신용등급 전체" })).toBeVisible();
+});
+
+// ui-audit ⑨ — 데스크톱 컬럼 순서(종류·발행일·표면이율…) 그대로 두면 375px에서 시세 값이
+// 가로 스크롤 너머로 밀려난다. 모바일 데이터 헤더의 첫 컬럼이 만기일인지 확인한다.
+test("모바일 데이터 헤더의 첫 컬럼은 만기일이다", async ({ page }) => {
+  await mockSnapshot(page, makeBonds(3));
+  await page.goto("/");
+
+  const firstDataHeader = page.locator("thead tr").nth(1).locator("th").first();
+  await expect(firstDataHeader).toContainText("만기일");
+});

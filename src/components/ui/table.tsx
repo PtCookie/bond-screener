@@ -1,6 +1,5 @@
 import * as React from "react";
-
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 
 interface TableProps extends React.ComponentProps<"table"> {
   /** 가로 스크롤 wrapper(`table-container`)에 붙는 클래스 — 예: 세로 스크롤 상한(max-height)을

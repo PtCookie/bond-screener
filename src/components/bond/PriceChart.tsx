@@ -15,6 +15,7 @@ import {
   type LineData,
   type Time,
 } from "lightweight-charts";
+import { useResolvedTheme } from "@/hooks/useTheme";
 import type { PricePoint } from "@/lib/bond/price-series";
 
 export type PriceChartMetric = "price" | "yield";
@@ -62,6 +63,10 @@ export function PriceChart({ points, metric }: PriceChartProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  // 선호값(useTheme)이 아니라 **해소값**이어야 한다 — "시스템"을 고른 채 OS가 뒤집히면
+  // data-theme은 "system" 그대로라 선호값 스냅샷이 변하지 않아 리렌더가 일어나지 않고,
+  // 차트만 옛 색으로 남는다.
+  const resolvedTheme = useResolvedTheme();
 
   // 차트 생성은 마운트 시 1회, cleanup에서 chart.remove(). 컨테이너는 데이터 유무와
   // 무관하게 항상 렌더되어야 한다 — 조건부로 언마운트하면 이 effect가 다시 돌지 않아
@@ -108,6 +113,26 @@ export function PriceChart({ points, metric }: PriceChartProps) {
           : { type: "price", precision: 2, minMove: 0.01 },
     });
   }, [metric]);
+
+  // 테마가 바뀌면 CSS 변수가 통째로 갈리므로 색을 다시 읽어 적용한다. `applyTheme`이
+  // data-theme과 .dark 클래스를 한 동기 호출에서 처리하고 MutationObserver 콜백은 그 뒤
+  // 마이크로태스크로 발화하므로, 이 effect가 도는 시점엔 .dark가 이미 <html>에 붙어 있어
+  // readCssColor가 새 팔레트를 읽는다. layout.background는 "transparent"라 손댈 것이 없다.
+  // (마운트 시 createChart가 칠한 값을 한 번 더 적용하지만, "첫 실행 건너뛰기" ref 꼼수보다
+  //  단순해서 그대로 둔다.)
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return;
+    const border = readCssColor("--border");
+    chart.applyOptions({
+      layout: { textColor: readCssColor("--muted-foreground") },
+      grid: { vertLines: { color: border }, horzLines: { color: border } },
+      rightPriceScale: { borderColor: border },
+      timeScale: { borderColor: border },
+    });
+    series.applyOptions({ color: readCssColor("--primary") });
+  }, [resolvedTheme]);
 
   useEffect(() => {
     const series = seriesRef.current;

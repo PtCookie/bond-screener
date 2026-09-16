@@ -11,6 +11,10 @@ const initialUrl = window.location.href;
 
 afterEach(() => {
   window.history.replaceState(null, "", initialUrl);
+  // ThemeToggle(src/lib/theme.ts)은 <html>에 직접 쓴다. 되돌리지 않으면 .dark가 같은
+  // 브라우저의 뒤 테스트로 새어 라이트 테마로 찍어 둔 스크린샷 베이스라인이 통째로 깨진다.
+  document.documentElement.classList.remove("dark");
+  delete document.documentElement.dataset.theme;
   try {
     sessionStorage.clear();
     localStorage.clear();

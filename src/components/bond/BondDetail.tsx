@@ -6,6 +6,7 @@
  * 그대로 넘긴다 — 시계열(가격 차트)만 클라이언트에서 별도로 받는다(`PriceChartCard`).
  */
 import { BOND_MARKET_CATEGORIES, type BondMarketCategory } from "@/api";
+import { AppHeader } from "@/components/layout/AppHeader";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import type { BondDetailApiResponse } from "@/lib/bond/detail";
 import { BondAllFields } from "./BondAllFields";
@@ -26,6 +27,8 @@ function BondDetailInner({ detail }: BondDetailProps) {
 
   return (
     <div className="space-y-6">
+      {/* h1은 BondDetailHeader의 종목명이 소유한다 — title을 넘기지 않는 이유. */}
+      <AppHeader />
       <BondDetailHeader
         isinCd={isinCd}
         srtnCd={srtnCd}

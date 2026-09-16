@@ -72,6 +72,17 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 
 `.astro` files are rendered on the server, and React is used via `client:*` directives only for components that need interactivity (e.g. `<BondTable client:load />`).
 
+### Theme (dark mode)
+
+**The DOM is the store.** `<html data-theme>` holds the user's *preference* (`system`/`light`/`dark`) and `<html class="dark">` holds the *resolved* value that CSS keys off. `src/lib/theme.ts` owns it, `src/hooks/useTheme.ts` wraps it with `useSyncExternalStore`, and `ThemeToggle` (in `AppHeader`, rendered by both islands) is the only UI. There is no Context provider — the two islands (`BondScreener`, `BondDetail`) do not share a React tree, but they do share one DOM, so they cannot fall out of sync.
+
+- **Do not remove `is:inline` from the theme script in `Layout.astro`'s `<head>`.** Astro would bundle it into a separate `type="module"` file, which is deferred and therefore runs *after* first paint — dark users would get a white flash on every page load. The price of `is:inline` is that the script cannot import anything, so it **duplicates** `applyTheme`'s resolve expression from `src/lib/theme.ts`; both files carry comments pointing at each other, and the storage key `bond-screener:theme` is hardcoded in the script. `e2e/theme.spec.ts` pins this structurally by asserting the script is a non-deferred classic script in `<head>` — that assertion is the only proxy we have for "no flash", since nothing observable from `page.evaluate` runs before paint.
+- This repo has **no `<ClientRouter />`** (MPA, every navigation is a full reload), so unlike the sibling `../www` project there is no `astro:after-swap` re-application. Do not copy that part back in.
+- **`useTheme()` returns the preference; `useResolvedTheme()` returns the resolved value — the distinction is load-bearing.** With "system" selected, an OS-level flip re-writes `data-theme` with the *same* string, so the preference snapshot does not change and React skips the re-render. Anything that reacts to the actual colors changing (`PriceChart`, which reads CSS variables into canvas via `readCssColor`) must use `useResolvedTheme()`, and `subscribeTheme` observes both `data-theme` and `class` for this reason.
+- `color-scheme` is a **CSS property** on `:root`/`.dark` (not a meta tag) so form controls and scrollbars follow; `<meta name="theme-color" id="theme-color-meta">` is kept in sync imperatively from two places (the inline script and `syncThemeColorMeta`) and its two literals must match `--background`.
+- `@custom-variant dark (&:is(.dark, .dark *))` matches the element carrying the class *and* its descendants — the stock `.dark *` would silently no-op any `dark:` utility placed on `<html>` itself.
+- `tests/setup-browser.ts` resets `.dark`/`data-theme` after every test. Without it the class leaks into later tests in the same browser and invalidates the light-theme screenshot baselines in `tests/components/screener/__screenshots__/`.
+
 ### Data-fetching pattern
 
 Open API calls are isolated in `src/lib/` or `src/api/`. The default pattern is to fetch initial data server-side in an Astro page and pass it to the React island as props.
@@ -151,11 +162,13 @@ Because of the daily call quota (10,000 calls on a development account) and the 
 ```
 docs/
   api/            # Spec docs for the two open APIs (1:1 with src/api/)
+  ui-audit.md     # UI audit backlog — what was fixed, what is left, and the traps hit while verifying
 migrations/       # D1 schema migrations
 scripts/          # Initial backfill and snapshot build CLIs (Node ESM, dependency-free)
 src/
   api/            # TypeScript types and constants for open API requests/responses (wire format as-is, no logic)
   components/     # React and Astro components
+    layout/       # Header shared by both islands (AppHeader) and the theme picker (ThemeToggle)
     providers/    # Context providers used inside React islands, e.g. QueryProvider
     ui/           # shadcn/ui components (generated, but editable directly)
   hooks/          # Custom React hooks (useScreenerData etc., TanStack Query based)
@@ -169,6 +182,7 @@ src/
     r2/            # R2 key naming, archiving, price delta snapshots
     snapshot/      # Screener list snapshot v2 format, encode, decode, merge, cron build (build.ts), bond delta (bond-delta.ts) (format.ts/encode.ts/index-file.ts do not use the @/ alias)
     mcp/           # MCP server factory (server.ts), the three tool definitions (tools.ts), response formatting (format.ts), access-policy gate (auth.ts — optional auth + rate-limit exemption)
+    theme.ts       # Theme store — `<html data-theme>` (preference) + `<html class="dark">` (resolved)
     utils.ts       # General-purpose utilities (cn etc.)
   pages/
     api/          # Server API routes (snapshot proxy, bond/[id] detail and time series, etc.)
