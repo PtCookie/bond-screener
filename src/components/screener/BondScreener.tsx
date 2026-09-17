@@ -99,12 +99,12 @@ function BondScreenerInner() {
         status={status}
       />
       {isError ? (
-        <div className="overflow-hidden rounded-lg border">
+        <div className="overflow-hidden rounded-2xl border">
           <ErrorState message={toFriendlyErrorMessage(error)} onRetry={() => void refetch()} />
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-lg border">
+          <div className="overflow-hidden rounded-2xl border">
             <ScreenerTable table={table} isLoading={isPending} onResetFilters={resetFilters} />
           </div>
           <ScreenerPagination table={table} totalCount={filteredRows.length} status={status} />

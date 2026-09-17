@@ -13,7 +13,7 @@ export function BondAllFields({ bond }: BondAllFieldsProps) {
   const fields = Object.values(ALL_BOND_FIELD_SPECS).filter((f) => !CURATED_BOND_KEYS.has(f.key));
 
   return (
-    <Collapsible className="bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 rounded-4xl shadow-md ring-1">
+    <Collapsible className="bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 rounded-2xl shadow-md ring-1">
       <CollapsibleTrigger
         className={cn(
           "group flex w-full items-center justify-between gap-2 px-6 py-4 text-left text-sm font-medium",

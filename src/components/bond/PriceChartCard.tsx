@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { BondMarketCategory } from "@/api";
 import { ErrorState } from "@/components/common/ErrorState";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useBondPrices } from "@/hooks/useBondPrices";
@@ -41,12 +41,10 @@ export function PriceChartCard({ isinCd, market }: PriceChartCardProps) {
     <Card>
       <CardHeader>
         <CardTitle>가격 추이</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* CardAction(shadcn Card의 grid-cols-[1fr_auto] 헤더 레이아웃)에 넣으면 좁은
-            화면에서 1fr 컬럼이 토글그룹에 밀려 제목이 글자 단위로 줄바꿈되는 문제가
-            있어(실측: 375px 폭에서 재현) 헤더 밖 CardContent에 별도 flex-wrap 줄로 둔다. */}
-        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+        {/* 지표 토글(버튼 2개)만 제목과 같은 행에 둔다 — 시장 토글까지 함께 넣으려던
+            예전 시도는 375px에서 제목이 글자 단위로 줄바꿈됐지만(ui-audit ⑭), 그 토글은
+            헤더로 옮겨갔고(BondDetailHeader) 여기 남은 건 버튼 2개뿐이라 재현되지 않는다. */}
+        <CardAction>
           <ToggleGroup
             aria-label="지표"
             variant="outline"
@@ -60,7 +58,9 @@ export function PriceChartCard({ isinCd, market }: PriceChartCardProps) {
             <ToggleGroupItem value="price">종가</ToggleGroupItem>
             <ToggleGroupItem value="yield">수익률</ToggleGroupItem>
           </ToggleGroup>
-        </div>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
         <div className="mb-3 flex justify-end">
           <ToggleGroup
             aria-label="기간"
