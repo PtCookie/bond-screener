@@ -40,13 +40,15 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
             {start}–{end} / 전체 {totalCount.toLocaleString("ko-KR")}건
           </span>
         )}
-        <div className="flex items-center gap-0.5">
+        <div role="group" aria-label="페이지당 표시 개수" className="flex items-center gap-0.5">
           {PAGE_SIZE_OPTIONS.map((size) => (
             <Button
               key={size}
               type="button"
               size="xs"
               variant={pageSize === size ? "secondary" : "ghost"}
+              aria-pressed={pageSize === size}
+              aria-label={`${size}건씩 보기`}
               onClick={() => table.setPageSize(size)}
             >
               {size}
@@ -64,7 +66,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.firstPage()}
           aria-label="처음 페이지"
         >
-          <CaretDoubleLeftIcon />
+          <CaretDoubleLeftIcon aria-hidden="true" />
         </Button>
         <Button
           type="button"
@@ -74,7 +76,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.previousPage()}
           aria-label="이전 페이지"
         >
-          <CaretLeftIcon />
+          <CaretLeftIcon aria-hidden="true" />
         </Button>
         {/* 복원된 pageIndex가 1인 채로 로딩하면 현재 코드는 "2 / 1"이라는 불가능한 값을
             그린다 — 페이지 수만이 아니라 슬롯 전체를 바꿔야 그것까지 막힌다. */}
@@ -93,7 +95,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.nextPage()}
           aria-label="다음 페이지"
         >
-          <CaretRightIcon />
+          <CaretRightIcon aria-hidden="true" />
         </Button>
         <Button
           type="button"
@@ -103,7 +105,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.lastPage()}
           aria-label="마지막 페이지"
         >
-          <CaretDoubleRightIcon />
+          <CaretDoubleRightIcon aria-hidden="true" />
         </Button>
       </div>
     </div>

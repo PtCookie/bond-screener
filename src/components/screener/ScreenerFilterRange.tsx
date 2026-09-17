@@ -50,7 +50,7 @@ export function ScreenerFilterRange({
         className={cn(buttonVariants({ variant: "outline", size: "sm" }), "justify-between gap-2 font-normal")}
       >
         <span className={active ? undefined : "text-muted-foreground"}>{label}</span>
-        <CaretDownIcon data-icon="inline-end" />
+        <CaretDownIcon aria-hidden="true" data-icon="inline-end" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 gap-2">
         {/* 다중선택 필터와 같은 "이 필터만 해제" 헤더 — 최소·최대를 각각 지우지 않아도 된다. */}

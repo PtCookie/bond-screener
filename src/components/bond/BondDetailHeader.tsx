@@ -21,7 +21,7 @@ export function BondDetailHeader({ isinCd, srtnCd, isinCdNm, bondIsurNm, latestP
   return (
     <div className="space-y-4">
       <a href="/" className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm">
-        <ArrowLeft className="size-4" />
+        <ArrowLeft aria-hidden="true" className="size-4" />
         목록으로
       </a>
       <div>

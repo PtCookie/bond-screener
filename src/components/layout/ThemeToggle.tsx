@@ -3,10 +3,11 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useTheme } from "@/hooks/useTheme";
+import { useTheme, type Theme } from "@/hooks/useTheme";
 
 /**
  * 테마 선택기(시스템/라이트/다크).
@@ -18,7 +19,7 @@ import { useTheme } from "@/hooks/useTheme";
  * 실제 표시는 <html>의 `.dark` 여부가 결정한다.
  */
 export function ThemeToggle() {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   return (
     <DropdownMenu>
@@ -38,9 +39,17 @@ export function ThemeToggle() {
         }
       />
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("system")}>시스템</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("light")}>라이트</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>다크</DropdownMenuItem>
+        <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value as Theme)}>
+          <DropdownMenuRadioItem value="system" closeOnClick>
+            시스템
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light" closeOnClick>
+            라이트
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark" closeOnClick>
+            다크
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

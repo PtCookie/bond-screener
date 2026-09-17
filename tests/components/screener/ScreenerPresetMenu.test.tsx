@@ -56,15 +56,35 @@ describe("목록", () => {
     expect(onApply).toHaveBeenCalledExactlyOnceWith("srfcInrtMin=5");
     await expect.poll(() => document.querySelector('[data-slot="popover-content"]')).toBeNull();
   });
+});
 
-  test("삭제 버튼은 해당 id로 onDelete를 호출한다", async () => {
+describe("삭제", () => {
+  test("삭제 버튼은 곧바로 지우지 않고 확인을 거친 뒤에만 onDelete를 호출한다", async () => {
     const onDelete = vi.fn();
     const screen = await renderMenu({ onDelete });
     await openMenu(screen);
 
     await userEvent.click(popover().getByRole("button", { name: "국채 단기물 삭제" }));
 
+    expect(onDelete).not.toHaveBeenCalled();
+    await expect
+      .element(popover().getByText("“국채 단기물” 프리셋을 삭제할까요? 이 작업은 되돌릴 수 없습니다."))
+      .toBeInTheDocument();
+
+    await userEvent.click(popover().getByRole("button", { name: "삭제", exact: true }));
     expect(onDelete).toHaveBeenCalledExactlyOnceWith("p1");
+  });
+
+  test("확인 단계에서 취소하면 지우지 않는다", async () => {
+    const onDelete = vi.fn();
+    const screen = await renderMenu({ onDelete });
+    await openMenu(screen);
+
+    await userEvent.click(popover().getByRole("button", { name: "국채 단기물 삭제" }));
+    await userEvent.click(popover().getByRole("button", { name: "취소" }));
+
+    expect(onDelete).not.toHaveBeenCalled();
+    await expect.element(popover().getByLabelText("프리셋 이름")).toBeInTheDocument();
   });
 });
 

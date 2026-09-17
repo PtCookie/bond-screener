@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import type { BondMarketCategory } from "@/api";
+import { ErrorState } from "@/components/common/ErrorState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useBondPrices } from "@/hooks/useBondPrices";
+import { toFriendlyErrorMessage } from "@/lib/errorMessage";
 import { decodePriceSeries, presetToRange, RANGE_PRESETS, type RangePreset } from "@/lib/bond/price-series";
 import { PriceChart, type PriceChartMetric } from "./PriceChart";
 
@@ -32,7 +34,7 @@ export function PriceChartCard({ isinCd, markets }: PriceChartCardProps) {
 
   // `market`은 항상 명시해 요청한다 — 생략하면 여러 시장이 섞여 와 시리즈 time 유일성이 깨진다
   // (`src/lib/bond/client.ts`의 `fetchBondPrices` 주석 참고).
-  const { data, isPending, isError, error } = useBondPrices(isinCd, market, range.from, range.to);
+  const { data, isPending, isError, error, refetch } = useBondPrices(isinCd, market, range.from, range.to);
   const points = useMemo(() => (data ? (decodePriceSeries(data).get(market) ?? []) : []), [data, market]);
 
   return (
@@ -99,9 +101,7 @@ export function PriceChartCard({ isinCd, markets }: PriceChartCardProps) {
         </div>
 
         {isError ? (
-          <div className="text-destructive flex h-90 items-center justify-center text-sm">
-            {error instanceof Error ? error.message : String(error)}
-          </div>
+          <ErrorState message={toFriendlyErrorMessage(error)} onRetry={() => void refetch()} />
         ) : isPending ? (
           <Skeleton className="h-90 w-full" />
         ) : (

@@ -152,3 +152,21 @@
         @apply font-sans;
     }
 }
+
+/* 스켈레톤의 animate-pulse는 로딩 중이라는 유일한 시각 신호라 죽이면 안 된다(끄면
+   "빈 회색 막대가 굳어 있는" 화면이 된다) — 그래서 전역으로 죽인 뒤 스켈레톤만 되살린다.
+   두 규칙의 특정도가 달라([data-slot="skeleton"] > *) 선언 순서와 무관하게 항상 이긴다. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    [data-slot="skeleton"] {
+        animation-duration: 2s !important;
+        animation-iteration-count: infinite !important;
+    }
+}

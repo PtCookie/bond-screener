@@ -52,10 +52,16 @@ describe("PriceChartCard", () => {
     resolveFetch(new Response(JSON.stringify(makeResponse()), { status: 200 }));
   });
 
-  test("에러 시 메시지를 표시한다", async () => {
-    stubFetch([{ match: (url) => url.includes("/prices"), status: 500, body: "" }]);
+  test("에러 시 제품 문구를 보여주고, 다시 시도 클릭 시 재요청한다", async () => {
+    const handle: StubFetchHandle = stubFetch([{ match: (url) => url.includes("/prices"), status: 500, body: "" }]);
     const screen = await renderWithQuery(<PriceChartCard isinCd="KR6000011D36" markets={["일반채권"]} />);
-    await expect.element(screen.getByText(/요청 실패/)).toBeInTheDocument();
+    await expect.element(screen.getByText("데이터를 불러오지 못했습니다.")).toBeInTheDocument();
+    // 원본 에러(`요청 실패: ... (HTTP 500)`)는 개발자용 문구라 화면에 그대로 노출하지 않는다.
+    await expect.element(screen.getByText(/요청 실패/)).not.toBeInTheDocument();
+
+    const firstCallCount = handle.calledUrls.length;
+    await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await expect.poll(() => handle.calledUrls.length).toBeGreaterThan(firstCallCount);
   });
 
   test("truncated가 true면 잘림 안내 문구를 표시한다", async () => {

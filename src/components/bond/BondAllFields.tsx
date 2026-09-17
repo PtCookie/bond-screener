@@ -21,7 +21,7 @@ export function BondAllFields({ bond }: BondAllFieldsProps) {
         )}
       >
         전체 항목 ({fields.length})
-        <CaretDown className="size-4 transition-transform group-data-panel-open:rotate-180" />
+        <CaretDown aria-hidden="true" className="size-4 transition-transform group-data-panel-open:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-2 px-6 pb-6 text-sm sm:grid-cols-2">

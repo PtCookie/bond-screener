@@ -1,15 +1,16 @@
 import { useCallback, useDeferredValue, useMemo } from "react";
 import { useTable, type PaginationState } from "@tanstack/react-table";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { ErrorState } from "@/components/common/ErrorState";
 import { QueryProvider } from "@/components/providers/QueryProvider";
 import { useScreenerViewState } from "@/hooks/useScreenerViewState";
 import { useScreenerData } from "@/hooks/useScreenerData";
 import { useFilterPresets } from "@/hooks/useFilterPresets";
+import { toFriendlyErrorMessage } from "@/lib/errorMessage";
 import { applyFilters, buildFilterOptions } from "@/lib/screener/filters";
 import { decodePresetQuery, encodePresetQuery } from "@/lib/screener/presets";
 import type { ScreenerRow, ScreenerStatus } from "@/lib/screener/types";
 import { screenerColumns, screenerFeatures } from "./columns";
-import { ScreenerError } from "./ScreenerError";
 import { ScreenerFilterBar } from "./ScreenerFilterBar";
 import { ScreenerPagination } from "./ScreenerPagination";
 import { ScreenerTable } from "./ScreenerTable";
@@ -99,10 +100,7 @@ function BondScreenerInner() {
       />
       {isError ? (
         <div className="overflow-hidden rounded-lg border">
-          <ScreenerError
-            message={error instanceof Error ? error.message : String(error)}
-            onRetry={() => void refetch()}
-          />
+          <ErrorState message={toFriendlyErrorMessage(error)} onRetry={() => void refetch()} />
         </div>
       ) : (
         <>
