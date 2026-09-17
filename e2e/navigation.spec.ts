@@ -18,8 +18,24 @@ const FIXTURE = makeBonds(1)[0];
 const FIXTURE_SRTN_CD = "E2E000001";
 
 async function expectDetailOf(page: Page) {
+  // Astro dev 툴바가 아일랜드 props를 JSON으로 그대로 담은 <code> 블록을 <main> 밖에
+  // 심어 두는데, ISIN 같은 값이 그 안에도 그대로 나타나 페이지 전체 검색과 부분일치한다
+  // (strict mode 위반) — 그래서 아래 검색은 전부 <main>으로 스코프한다.
+  const main = page.locator("main");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(FIXTURE.isinCdNm);
-  await expect(page.getByText(`${FIXTURE.bondIsurNm} · ${FIXTURE.isinCd}`)).toBeVisible();
+  // 발행인·단축코드는 헤더에서 빠지고(ui-audit ⑱) 발행 개요 카드로 옮겼다 — 헤더에는
+  // 라벨과 함께 ISIN만 남는다.
+  await expect(main.getByText(FIXTURE.isinCd, { exact: true })).toBeVisible();
+  await expect(main.getByText("ISIN", { exact: true })).toBeVisible();
+  // 픽스처(`e2e/fixtures/detail.sql`)가 최신 bas_dt에 KTS·일반채권 두 시장을 함께 갖고
+  // 있으므로, 시장 토글과 종가/수익률이 실제 화면에서 어떻게 보이는지까지 확인한다
+  // (⑥⑱은 소스만 읽고 올린 항목이라 화면 확인이 안 됐었다 — ui-audit ⚠️). "종가"/"수익률"은
+  // 아래 가격 추이 카드의 지표 토글에도 같은 문구가 있어(strict mode 위반), 대신 헤더에만
+  // 뜨는 값(기본 선택 시장 KTS의 20260828 종가)으로 확인한다.
+  const marketToggle = main.getByRole("group", { name: "시장" });
+  await expect(marketToggle).toBeVisible();
+  await expect(marketToggle.getByRole("button", { name: "KTS" })).toBeVisible();
+  await expect(main.getByText("10,150", { exact: true })).toBeVisible();
 }
 
 test.describe("목록 → 상세 이동", () => {

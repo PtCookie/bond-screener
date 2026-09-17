@@ -6,10 +6,12 @@ import { DETAIL_SECTIONS, formatDetailField } from "@/lib/bond/detail-view";
 interface BondFieldSectionsProps {
   bond: Record<string, BondDetailField>;
   state: Record<string, string | number | null> | null;
+  /** `derived` 소스 필드(시장구분 등)의 값 — 호출부가 계산해 넘긴다. 없으면 대시로 표시된다. */
+  derived?: Record<string, string | null>;
 }
 
 /** 핵심 큐레이션 섹션(`DETAIL_SECTIONS`)을 카드 그리드로 렌더한다. */
-export function BondFieldSections({ bond, state }: BondFieldSectionsProps) {
+export function BondFieldSections({ bond, state, derived }: BondFieldSectionsProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {DETAIL_SECTIONS.map((section) => (
@@ -22,7 +24,12 @@ export function BondFieldSections({ bond, state }: BondFieldSectionsProps) {
               {section.fields.map((field) => {
                 // state 소스 필드(신용등급 4종·잔액·차기/직전 이표일)는 이력이 없는
                 // 종목이면 state 자체가 null일 수 있다 — 그 경우 대시로 표시된다.
-                const raw = field.source === "bond" ? bond[field.key] : (state?.[field.key] ?? null);
+                const raw =
+                  field.source === "bond"
+                    ? bond[field.key]
+                    : field.source === "state"
+                      ? (state?.[field.key] ?? null)
+                      : (derived?.[field.key] ?? null);
                 return (
                   <Fragment key={field.key}>
                     <dt className="text-muted-foreground">{field.label}</dt>

@@ -17,14 +17,14 @@ function todayYmd(): number {
 
 interface PriceChartCardProps {
   isinCd: string;
-  /** SSR로 받은 `latestPrices`에 실제로 존재하는 시장만 — 없는 시장을 선택지로 보여줄 이유가 없다. */
-  markets: BondMarketCategory[];
+  /**
+   * 선택된 시장. 토글 UI와 상태는 `BondDetailHeader`/`BondDetail`이 갖는다 — 헤더의 최신
+   * 시세와 이 차트가 같은 시장을 가리켜야 해 상위로 올렸다(ui-audit ⑥).
+   */
+  market: BondMarketCategory;
 }
 
-const DEFAULT_MARKET: BondMarketCategory = "일반채권";
-
-export function PriceChartCard({ isinCd, markets }: PriceChartCardProps) {
-  const [market, setMarket] = useState<BondMarketCategory>(markets[0] ?? DEFAULT_MARKET);
+export function PriceChartCard({ isinCd, market }: PriceChartCardProps) {
   const [preset, setPreset] = useState<RangePreset>("1Y");
   const [metric, setMetric] = useState<PriceChartMetric>("price");
 
@@ -44,29 +44,9 @@ export function PriceChartCard({ isinCd, markets }: PriceChartCardProps) {
       </CardHeader>
       <CardContent>
         {/* CardAction(shadcn Card의 grid-cols-[1fr_auto] 헤더 레이아웃)에 넣으면 좁은
-            화면에서 1fr 컬럼이 두 토글그룹에 밀려 제목이 글자 단위로 줄바꿈되는 문제가
+            화면에서 1fr 컬럼이 토글그룹에 밀려 제목이 글자 단위로 줄바꿈되는 문제가
             있어(실측: 375px 폭에서 재현) 헤더 밖 CardContent에 별도 flex-wrap 줄로 둔다. */}
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          {markets.length > 1 ? (
-            <ToggleGroup
-              aria-label="시장"
-              variant="outline"
-              size="sm"
-              value={[market]}
-              onValueChange={(v) => {
-                const next = v[0] as BondMarketCategory | undefined;
-                if (next) setMarket(next);
-              }}
-            >
-              {markets.map((m) => (
-                <ToggleGroupItem key={m} value={m}>
-                  {m}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          ) : (
-            <span />
-          )}
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
           <ToggleGroup
             aria-label="지표"
             variant="outline"

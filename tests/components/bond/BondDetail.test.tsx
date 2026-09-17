@@ -6,16 +6,17 @@
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
+import { userEvent } from "vitest/browser";
 import { BondDetail } from "@/components/bond/BondDetail";
-import { stubFetch } from "../../helpers/fetch-stub";
+import { stubFetch, type StubFetchHandle } from "../../helpers/fetch-stub";
 import { makeBondDetailResponse } from "../../helpers/bond-detail";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function stubPrices() {
-  stubFetch([
+function stubPrices(): StubFetchHandle {
+  return stubFetch([
     {
       match: (url) => url.includes("/prices"),
       // decodePriceSeries가 basDt/mrktCtg/clprPrc/clprBnfRt 컬럼 존재를 요구한다 —
@@ -71,5 +72,35 @@ describe("BondDetail", () => {
     const detail = makeBondDetailResponse({ latestPrices: [{ mrkt_ctg: 2, clpr_prc: 10000 }] });
     const screen = await render(<BondDetail detail={detail} />);
     await expect.element(screen.getByRole("group", { name: "시장" })).not.toBeInTheDocument();
+  });
+
+  test("헤더의 시장 토글을 누르면 가격 추이 차트도 같은 시장으로 재요청한다", async () => {
+    const handle = stubPrices();
+    const detail = makeBondDetailResponse({
+      latestPrices: [
+        { mrkt_ctg: 2, clpr_prc: 10000 }, // 일반채권
+        { mrkt_ctg: 1, clpr_prc: 10050 }, // KTS
+      ],
+    });
+    const screen = await render(<BondDetail detail={detail} />);
+    const toggle = screen.getByRole("group", { name: "시장" });
+    // 초기 선택은 BOND_MARKET_CATEGORIES 선언 순서(KTS → 일반채권)의 첫 시장이다.
+    await expect.poll(() => handle.calledUrls.at(-1)).toContain("market=KTS");
+
+    await userEvent.click(toggle.getByRole("button", { name: "일반채권" }));
+    await expect.poll(() => handle.calledUrls.at(-1)).toContain("market=%EC%9D%BC%EB%B0%98%EC%B1%84%EA%B6%8C");
+  });
+
+  test("발행 개요의 시장구분에 존재하는 시장이 모두 나열된다", async () => {
+    stubPrices();
+    const detail = makeBondDetailResponse({
+      latestPrices: [
+        { mrkt_ctg: 2, clpr_prc: 10000 }, // 일반채권
+        { mrkt_ctg: 1, clpr_prc: 10050 }, // KTS
+      ],
+    });
+    const screen = await render(<BondDetail detail={detail} />);
+    await expect.element(screen.getByText("시장구분")).toBeInTheDocument();
+    await expect.element(screen.getByText("KTS, 일반채권")).toBeInTheDocument();
   });
 });
