@@ -231,11 +231,15 @@ describe("ScreenerTable", () => {
     const screen = await render(<Harness rows={makeRows(1)} />);
     const link = screen.container.querySelector<HTMLElement>("tbody tr td:first-child a");
     const plainCell = screen.container.querySelector<HTMLElement>("tbody tr td:nth-child(2) span");
-    if (!link || !plainCell) throw new Error("링크 또는 비교 대상 셀을 찾지 못했습니다");
+    const plainTd = screen.container.querySelector<HTMLElement>("tbody tr td:nth-child(2)");
+    if (!link || !plainCell || !plainTd) throw new Error("링크 또는 비교 대상 셀을 찾지 못했습니다");
 
     // 이전 테스트가 남긴 실제(물리) 마우스 좌표가 이번에 새로 렌더된 링크와 같은 화면
     // 위치에 겹치면 hover 없이도 hover 상태로 잡힐 수 있어, 무관한 셀로 먼저 옮겨 둔다.
-    await screen.getByText("회사채").hover();
+    // 그 셀은 이제 전체를 덮는 오버레이 링크(ui-audit ㉗)를 갖고 있어 텍스트 자체는 더 이상
+    // 포인터 이벤트를 받지 않으므로, 오버레이를 포함하는 `<td>` 자체를 hover 대상으로 삼는다
+    // (Playwright의 "receives events" 판정은 대상 요소나 그 자손이 히트되면 통과한다).
+    await page.elementLocator(plainTd).hover();
 
     const lightLinkColor = getComputedStyle(link).color;
     expect(getComputedStyle(link).textDecorationLine).toBe("none");
