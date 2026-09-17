@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 /* `.dark`는 <html> 자신에 붙으므로(Layout.astro의 인라인 스크립트) 변형이 그 요소 자체와
    자손을 모두 매치해야 한다 — 기본형인 `.dark *`만 쓰면 <html>에 건 `dark:` 유틸리티가
@@ -100,8 +101,8 @@
 }
 
 @theme inline {
-    --font-sans: "Inter Variable", sans-serif;
-    --font-heading: "JetBrains Mono Variable", monospace;
+    --font-sans: "Inter Variable", "Pretendard Variable", sans-serif;
+    --font-heading: "JetBrains Mono Variable", "Pretendard Variable", monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
