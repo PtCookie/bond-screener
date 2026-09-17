@@ -49,7 +49,7 @@ export function BondDetailHeader({
         목록으로
       </a>
       <div>
-        <h1 className="font-heading text-2xl font-medium">{isinCdNm ?? DASH}</h1>
+        <h1 className="font-heading text-2xl font-medium text-pretty">{isinCdNm ?? DASH}</h1>
         {/* 라벨+값 구조는 AppHeader의 기준일자와 같다 — 코드값은 라벨 없이는 읽히지 않는다. */}
         <p className="flex items-baseline gap-1.5 text-sm">
           <span className="text-muted-foreground text-xs">ISIN</span>{" "}
