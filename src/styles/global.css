@@ -52,6 +52,11 @@
     /* sticky 열(스크리너 1열)은 반투명 배경을 쓸 수 없다 — 뒤로 스크롤되는 셀이 비친다.
        행 hover 틴트(bg-muted/50)를 페이지 배경과 미리 합성한 불투명 등가색. */
     --row-hover: color-mix(in oklab, var(--muted) 50%, var(--background));
+    /* 본문 텍스트 색으로 쓰는 브랜드색. --primary는 버튼 배경(그 위에 --primary-foreground를
+       얹는 용도)으로 설계돼 라이트에서만 우연히 대비가 맞고, 다크 --primary(L 0.432)는 배경
+       위 텍스트로 쓰면 실측 대비 2.60:1로 WCAG AA(4.5:1)에 못 미친다 — 그래서 재활용하지
+       않는다. 라이트는 --primary와 같은 값이라 원 색상 그대로다. */
+    --link: var(--primary);
 }
 
 .dark {
@@ -89,6 +94,9 @@
     --sidebar-ring: oklch(0.56 0.021 213.5);
     --price-up: oklch(0.704 0.191 22.216);
     --price-down: oklch(0.62 0.14 250);
+    /* --sidebar-primary와 같은 값 — 다크 팔레트에서 이미 "배경 위 밝은 브랜드색 텍스트"
+       용도로 검증된 라이트니스다(다크 배경 대비 실측 8.00:1). */
+    --link: oklch(0.696 0.17 162.48);
 }
 
 @theme inline {
@@ -128,6 +136,7 @@
     --color-price-up: var(--price-up);
     --color-price-down: var(--price-down);
     --color-row-hover: var(--row-hover);
+    --color-link: var(--link);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);

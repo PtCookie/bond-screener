@@ -67,7 +67,11 @@ export const screenerColumns = helper.columns([
     cell: (c) => {
       const v = c.getValue();
       return (
-        <a href={`/bond/${c.row.original.isinCd}`} className="block truncate" title={v ?? undefined}>
+        <a
+          href={`/bond/${c.row.original.isinCd}`}
+          className="text-link block truncate underline-offset-4 hover:underline"
+          title={v ?? undefined}
+        >
           {v ?? DASH}
         </a>
       );

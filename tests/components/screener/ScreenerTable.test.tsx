@@ -221,6 +221,33 @@ describe("ScreenerTable", () => {
     expect(alphaOf(after)).toBe(255);
     expect(after).not.toBe(before); // hover 틴트가 실제로 적용됐는지도 함께 확인
   });
+
+  // ui-audit ⑫⑮: 종목명 링크가 일반 텍스트와 동일하게 렌더돼(색·밑줄·hover 전무)
+  // 이 화면의 유일한 주요 액션에 어포던스가 없었다. `text-link`(밑줄은 hover에서만)로
+  // 고정한다 — `--link`는 `--primary`를 텍스트로 재사용하되, 다크 --primary(L 0.432)는
+  // 배경 위 텍스트로 쓰면 실측 대비 2.60:1로 WCAG AA에 못 미쳐 다크에서만 별도로 밝힌
+  // 값이다(`global.css` 참고). 그래서 다크 모드에서 색이 달라지는 것까지 함께 고정한다.
+  test("종목명 링크는 일반 텍스트와 구분되는 색과 hover 밑줄을 갖고, 다크 모드에서 대비 보정된 색을 쓴다", async () => {
+    const screen = await render(<Harness rows={makeRows(1)} />);
+    const link = screen.container.querySelector<HTMLElement>("tbody tr td:first-child a");
+    const plainCell = screen.container.querySelector<HTMLElement>("tbody tr td:nth-child(2) span");
+    if (!link || !plainCell) throw new Error("링크 또는 비교 대상 셀을 찾지 못했습니다");
+
+    // 이전 테스트가 남긴 실제(물리) 마우스 좌표가 이번에 새로 렌더된 링크와 같은 화면
+    // 위치에 겹치면 hover 없이도 hover 상태로 잡힐 수 있어, 무관한 셀로 먼저 옮겨 둔다.
+    await screen.getByText("회사채").hover();
+
+    const lightLinkColor = getComputedStyle(link).color;
+    expect(getComputedStyle(link).textDecorationLine).toBe("none");
+    expect(lightLinkColor).not.toBe(getComputedStyle(plainCell).color);
+
+    await screen.getByText("테스트채권0").hover();
+    expect(getComputedStyle(link).textDecorationLine).toBe("underline");
+
+    document.documentElement.classList.add("dark");
+    expect(getComputedStyle(link).color).not.toBe(lightLinkColor);
+    document.documentElement.classList.remove("dark");
+  });
 });
 
 function alphaOf(color: string): number {
