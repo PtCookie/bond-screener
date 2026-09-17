@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
 /* `.dark`는 <html> 자신에 붙으므로(Layout.astro의 인라인 스크립트) 변형이 그 요소 자체와
    자손을 모두 매치해야 한다 — 기본형인 `.dark *`만 쓰면 <html>에 건 `dark:` 유틸리티가
@@ -52,6 +53,11 @@
     /* sticky 열(스크리너 1열)은 반투명 배경을 쓸 수 없다 — 뒤로 스크롤되는 셀이 비친다.
        행 hover 틴트(bg-muted/50)를 페이지 배경과 미리 합성한 불투명 등가색. */
     --row-hover: color-mix(in oklab, var(--muted) 50%, var(--background));
+    /* 본문 텍스트 색으로 쓰는 브랜드색. --primary는 버튼 배경(그 위에 --primary-foreground를
+       얹는 용도)으로 설계돼 라이트에서만 우연히 대비가 맞고, 다크 --primary(L 0.432)는 배경
+       위 텍스트로 쓰면 실측 대비 2.60:1로 WCAG AA(4.5:1)에 못 미친다 — 그래서 재활용하지
+       않는다. 라이트는 --primary와 같은 값이라 원 색상 그대로다. */
+    --link: var(--primary);
 }
 
 .dark {
@@ -89,11 +95,14 @@
     --sidebar-ring: oklch(0.56 0.021 213.5);
     --price-up: oklch(0.704 0.191 22.216);
     --price-down: oklch(0.62 0.14 250);
+    /* --sidebar-primary와 같은 값 — 다크 팔레트에서 이미 "배경 위 밝은 브랜드색 텍스트"
+       용도로 검증된 라이트니스다(다크 배경 대비 실측 8.00:1). */
+    --link: oklch(0.696 0.17 162.48);
 }
 
 @theme inline {
-    --font-sans: "Inter Variable", sans-serif;
-    --font-heading: "JetBrains Mono Variable", monospace;
+    --font-sans: "Inter Variable", "Pretendard Variable", sans-serif;
+    --font-heading: "JetBrains Mono Variable", "Pretendard Variable", monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -128,6 +137,7 @@
     --color-price-up: var(--price-up);
     --color-price-down: var(--price-down);
     --color-row-hover: var(--row-hover);
+    --color-link: var(--link);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -150,5 +160,23 @@
     }
     html {
         @apply font-sans;
+    }
+}
+
+/* 스켈레톤의 animate-pulse는 로딩 중이라는 유일한 시각 신호라 죽이면 안 된다(끄면
+   "빈 회색 막대가 굳어 있는" 화면이 된다) — 그래서 전역으로 죽인 뒤 스켈레톤만 되살린다.
+   두 규칙의 특정도가 달라([data-slot="skeleton"] > *) 선언 순서와 무관하게 항상 이긴다. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+    [data-slot="skeleton"] {
+        animation-duration: 2s !important;
+        animation-iteration-count: infinite !important;
     }
 }

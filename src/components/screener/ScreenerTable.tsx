@@ -1,6 +1,6 @@
-import type { MouseEvent, CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { Header, ReactTable, Row } from "@tanstack/react-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "cn";
 import { ScreenerEmpty } from "./ScreenerEmpty";
@@ -91,9 +91,15 @@ function mobileMetaClass(column: ScreenerColumn): string {
   );
 }
 
-function handleRowClick(e: MouseEvent<HTMLTableRowElement>, row: ScreenerRowModel): void {
-  if ((e.target as HTMLElement).closest("a, button")) return;
-  window.location.href = `/bond/${row.original.isinCd}`;
+/**
+ * 셀을 덮는 오버레이 링크는 항상 콘텐츠보다 위에 그려지므로, 그대로 두면 마우스 hover가
+ * 셀 콘텐츠(예: truncate된 텍스트의 `title` 툴팁)에 닿지 못한다. 오버레이 자체에 같은
+ * 문자열을 `title`로 넘겨 툴팁이 그대로 뜨게 한다 — 숫자/포맷 컬럼은 원래도 `title`이
+ * 없었으므로 문자열 값일 때만 넘긴다(포맷 전 원값을 잘못된 툴팁으로 보여주지 않기 위함).
+ */
+function overlayTitle(cell: { getValue: () => unknown }): string | undefined {
+  const value = cell.getValue();
+  return typeof value === "string" ? value : undefined;
 }
 
 /**
@@ -162,6 +168,9 @@ function DesktopTable({
       style={{ minWidth: `${minWidth}rem` }}
       aria-busy={isLoading}
     >
+      {/* 표에 접근 가능한 이름을 준다(ui-audit ⑳) — HTML은 caption이 table의 첫 자식일 것을
+          요구하므로 colgroup보다 앞에 둔다. sr-only라 화면에는 아무 영향이 없다. */}
+      <TableCaption className="sr-only">채권 목록</TableCaption>
       <colgroup>
         {headers.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -192,18 +201,27 @@ function DesktopTable({
           <DesktopSkeletonRows headers={headers} count={skeletonRowCount(table.state.pagination.pageSize, false)} />
         ) : (
           rows.map((row) => (
-            <TableRow key={row.id} className="group/row cursor-pointer" onClick={(e) => handleRowClick(e, row)}>
+            <TableRow key={row.id} className="group/row cursor-pointer">
               {row.getAllCells().map((cell, idx) => (
                 <TableCell
                   key={cell.id}
                   className={cn(
                     "truncate",
-                    idx === 0 && STICKY_FIRST_COL,
+                    idx === 0 ? STICKY_FIRST_COL : "relative",
                     cell.column.columnDef.meta?.align === "end" && "text-right tabular-nums",
                     cell.column.columnDef.meta?.groupStart && "border-l",
                   )}
                 >
                   <table.FlexRender cell={cell} />
+                  {idx !== 0 && (
+                    <a
+                      href={`/bond/${row.original.isinCd}`}
+                      title={overlayTitle(cell)}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="absolute inset-0"
+                    />
+                  )}
                 </TableCell>
               ))}
             </TableRow>
@@ -239,6 +257,7 @@ function MobileTable({
       style={{ minWidth: `${minWidth}rem` }}
       aria-busy={isLoading}
     >
+      <TableCaption className="sr-only">채권 목록</TableCaption>
       <colgroup>
         {dataHeaders.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -277,11 +296,7 @@ function MobileTable({
             const [nameCell, ...rawDataCells] = row.getAllCells();
             const dataCells = orderForMobile(rawDataCells);
             return [
-              <TableRow
-                key={`${row.id}-name`}
-                className={cn("hover:bg-muted/50 cursor-pointer", "border-b-0")}
-                onClick={(e) => handleRowClick(e, row)}
-              >
+              <TableRow key={`${row.id}-name`} className={cn("hover:bg-muted/50 cursor-pointer", "border-b-0")}>
                 <TableCell colSpan={dataColCount} className="pb-1">
                   {nameCell && (
                     <div className={cn("sticky left-0 font-medium", MOBILE_NAME_MAX_WIDTH)}>
@@ -290,21 +305,24 @@ function MobileTable({
                   )}
                 </TableCell>
               </TableRow>,
-              <TableRow
-                key={`${row.id}-data`}
-                className="hover:bg-muted/50 cursor-pointer"
-                onClick={(e) => handleRowClick(e, row)}
-              >
+              <TableRow key={`${row.id}-data`} className="hover:bg-muted/50 cursor-pointer">
                 {dataCells.map((cell) => (
                   <TableCell
                     key={cell.id}
                     className={cn(
-                      "truncate",
+                      "relative truncate",
                       mobileMetaClass(cell.column),
                       cell.column.columnDef.meta?.align === "end" && "tabular-nums",
                     )}
                   >
                     <table.FlexRender cell={cell} />
+                    <a
+                      href={`/bond/${row.original.isinCd}`}
+                      title={overlayTitle(cell)}
+                      tabIndex={-1}
+                      aria-hidden="true"
+                      className="absolute inset-0"
+                    />
                   </TableCell>
                 ))}
               </TableRow>,

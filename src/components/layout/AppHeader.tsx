@@ -35,7 +35,7 @@ export function AppHeader({ title, summary }: AppHeaderProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-3">
-        {title && <h1 className="text-lg font-semibold">{title}</h1>}
+        {title && <h1 className="text-lg font-semibold text-pretty">{title}</h1>}
         {summary && summary.status !== "error" && (
           // 배지가 아니라 라벨+값이다(ui-audit ⑬) — 금융 데이터 도구에서 "이 숫자가 언제
           // 것인가"는 보조 정보 기호(muted outline 배지)로 묻힐 값이 아니다. 라벨은 작게

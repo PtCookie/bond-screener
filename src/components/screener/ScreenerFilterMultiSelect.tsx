@@ -28,7 +28,7 @@ export function ScreenerFilterMultiSelect({ label, options, selected, onChange }
         <span className={selected.length > 0 ? undefined : "text-muted-foreground"}>
           {label} {selected.length > 0 ? selected.length : "전체"}
         </span>
-        <CaretDownIcon data-icon="inline-end" />
+        <CaretDownIcon aria-hidden="true" data-icon="inline-end" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-56 gap-2">
         {/* 이 필터 하나만 비우는 버튼 — 필터 바의 "초기화"는 전체를 되돌려 대안이 못 된다.

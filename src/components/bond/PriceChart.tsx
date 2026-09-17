@@ -16,9 +16,11 @@ import {
   type Time,
 } from "lightweight-charts";
 import { useResolvedTheme } from "@/hooks/useTheme";
-import type { PricePoint } from "@/lib/bond/price-series";
+import type { PriceChartMetric, PricePoint } from "@/lib/bond/price-series";
 
-export type PriceChartMetric = "price" | "yield";
+// 기존 import 경로(`@/components/bond/PriceChart`에서 `PriceChartMetric`을 가져오던 곳)를
+// 깨지 않으려는 재노출 — 정의는 `src/lib/bond/price-series.ts`로 옮겼다(chart-view-state.ts와 공유).
+export type { PriceChartMetric };
 
 interface PriceChartProps {
   points: PricePoint[];
@@ -88,8 +90,11 @@ export function PriceChart({ points, metric }: PriceChartProps) {
       rightPriceScale: { borderColor: readCssColor("--border") },
       timeScale: { borderColor: readCssColor("--border") },
     });
+    // --primary가 아니라 --link다 — 다크 --primary(L 0.432)는 카드 배경 위 대비가 2.60:1로
+    // AA(4.5:1)에 못 미친다(ui-audit ⑫⑮에서 종목명 링크가 이미 겪은 함정과 동일). --link는
+    // 라이트에서 --primary와 같은 값이고 다크에서만 8.00:1로 갈아둔 변수라 그대로 재사용한다.
     const series = chart.addSeries(LineSeries, {
-      color: readCssColor("--primary"),
+      color: readCssColor("--link"),
       lineWidth: 2,
     });
 
@@ -131,7 +136,7 @@ export function PriceChart({ points, metric }: PriceChartProps) {
       rightPriceScale: { borderColor: border },
       timeScale: { borderColor: border },
     });
-    series.applyOptions({ color: readCssColor("--primary") });
+    series.applyOptions({ color: readCssColor("--link") });
   }, [resolvedTheme]);
 
   useEffect(() => {

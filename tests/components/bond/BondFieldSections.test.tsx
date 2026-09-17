@@ -32,4 +32,14 @@ describe("BondFieldSections", () => {
     const screen = await render(<BondFieldSections bond={{}} state={{ kisGrade: "AAA" }} />);
     await expect.element(screen.getByText("AAA")).toBeInTheDocument();
   });
+
+  test("derived 소스 필드(시장구분)는 derived 객체에서 값을 가져온다", async () => {
+    const screen = await render(<BondFieldSections bond={{}} state={null} derived={{ mrktCtg: "KTS, 일반채권" }} />);
+    await expect.element(screen.getByText("KTS, 일반채권")).toBeInTheDocument();
+  });
+
+  test("derived를 넘기지 않으면 시장구분은 대시로 표시된다", async () => {
+    const screen = await render(<BondFieldSections bond={{}} state={null} />);
+    await expect.element(screen.getByText("시장구분")).toBeInTheDocument();
+  });
 });

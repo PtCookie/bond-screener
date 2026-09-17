@@ -31,7 +31,14 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
   const end = Math.min((pageIndex + 1) * pageSize, totalCount);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
+    // id+tabIndex는 "표 건너뛰기" 스킵 링크(BondScreener.tsx)의 착지 지점이다(ui-audit ⑳) —
+    // 프래그먼트 이동만으로는 키보드 포커스가 따라가지 않는 브라우저가 있어 tabIndex={-1}이
+    // 필요하다(표준 스킵 링크 기법). 포커스 링은 기본값 그대로 둬 키보드로 도달했을 때만 보인다.
+    <div
+      id="screener-pagination"
+      tabIndex={-1}
+      className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2"
+    >
       <div className="text-muted-foreground flex items-center gap-2 text-sm">
         {status === "loading" ? (
           <Skeleton className="h-4 w-32" aria-hidden="true" />
@@ -40,13 +47,15 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
             {start}–{end} / 전체 {totalCount.toLocaleString("ko-KR")}건
           </span>
         )}
-        <div className="flex items-center gap-0.5">
+        <div role="group" aria-label="페이지당 표시 개수" className="flex items-center gap-0.5">
           {PAGE_SIZE_OPTIONS.map((size) => (
             <Button
               key={size}
               type="button"
               size="xs"
               variant={pageSize === size ? "secondary" : "ghost"}
+              aria-pressed={pageSize === size}
+              aria-label={`${size}건씩 보기`}
               onClick={() => table.setPageSize(size)}
             >
               {size}
@@ -64,7 +73,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.firstPage()}
           aria-label="처음 페이지"
         >
-          <CaretDoubleLeftIcon />
+          <CaretDoubleLeftIcon aria-hidden="true" />
         </Button>
         <Button
           type="button"
@@ -74,7 +83,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.previousPage()}
           aria-label="이전 페이지"
         >
-          <CaretLeftIcon />
+          <CaretLeftIcon aria-hidden="true" />
         </Button>
         {/* 복원된 pageIndex가 1인 채로 로딩하면 현재 코드는 "2 / 1"이라는 불가능한 값을
             그린다 — 페이지 수만이 아니라 슬롯 전체를 바꿔야 그것까지 막힌다. */}
@@ -93,7 +102,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.nextPage()}
           aria-label="다음 페이지"
         >
-          <CaretRightIcon />
+          <CaretRightIcon aria-hidden="true" />
         </Button>
         <Button
           type="button"
@@ -103,7 +112,7 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
           onClick={() => table.lastPage()}
           aria-label="마지막 페이지"
         >
-          <CaretDoubleRightIcon />
+          <CaretDoubleRightIcon aria-hidden="true" />
         </Button>
       </div>
     </div>

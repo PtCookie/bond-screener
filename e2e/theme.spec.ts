@@ -25,7 +25,7 @@ async function gotoScreener(page: Page) {
 
 async function choose(page: Page, label: "시스템" | "라이트" | "다크") {
   await page.getByRole("button", { name: "테마 전환" }).click();
-  await page.getByRole("menuitem", { name: label }).click();
+  await page.getByRole("menuitemradio", { name: label }).click();
 }
 
 // 테마는 오직 스크립트로만 입혀져야 한다. 서버가 특정 테마를 구워 내려보내면 캐시된 문서가

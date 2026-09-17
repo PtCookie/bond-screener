@@ -13,7 +13,7 @@ export function BondAllFields({ bond }: BondAllFieldsProps) {
   const fields = Object.values(ALL_BOND_FIELD_SPECS).filter((f) => !CURATED_BOND_KEYS.has(f.key));
 
   return (
-    <Collapsible className="bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 rounded-4xl shadow-md ring-1">
+    <Collapsible className="bg-card text-card-foreground ring-foreground/5 dark:ring-foreground/10 rounded-2xl shadow-md ring-1">
       <CollapsibleTrigger
         className={cn(
           "group flex w-full items-center justify-between gap-2 px-6 py-4 text-left text-sm font-medium",
@@ -21,7 +21,7 @@ export function BondAllFields({ bond }: BondAllFieldsProps) {
         )}
       >
         전체 항목 ({fields.length})
-        <CaretDown className="size-4 transition-transform group-data-panel-open:rotate-180" />
+        <CaretDown aria-hidden="true" className="size-4 transition-transform group-data-panel-open:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-2 px-6 pb-6 text-sm sm:grid-cols-2">

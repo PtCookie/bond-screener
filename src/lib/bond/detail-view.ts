@@ -11,8 +11,13 @@ import type { BondDetailField, CodeLabelField } from "./detail";
 
 export type FieldKind = "text" | "ymd" | "rate" | "amount" | "bool" | "codeLabel";
 
-/** 어느 응답 객체(`bond` 정적 필드 vs `state` SCD 이력)에서 값을 꺼내는지. */
-export type FieldSource = "bond" | "state";
+/**
+ * 어느 응답 객체에서 값을 꺼내는지 — `bond` 정적 필드, `state` SCD 이력, 그리고 어느
+ * 테이블 컬럼도 아닌 `derived`(호출부가 계산해 넘기는 파생값, 예: 시세가 존재하는 시장 목록).
+ * `derived`를 별도 소스로 둬야 `CURATED_BOND_KEYS` ↔ `BOND_COLUMNS` 1:1 불변식
+ * (`tests/bond-detail-view.test.ts`)이 그대로 유지된다.
+ */
+export type FieldSource = "bond" | "state" | "derived";
 
 export interface FieldSpec {
   key: string;
@@ -27,6 +32,10 @@ function bond(key: string, label: string, kind: FieldKind): FieldSpec {
 
 function state(key: string, label: string, kind: FieldKind): FieldSpec {
   return { key, label, kind, source: "state" };
+}
+
+function derived(key: string, label: string, kind: FieldKind): FieldSpec {
+  return { key, label, kind, source: "derived" };
 }
 
 export interface DetailSection {
@@ -49,6 +58,10 @@ export const DETAIL_SECTIONS: DetailSection[] = [
       bond("scrsItmsKcd", "유가증권종목종류", "codeLabel"),
       bond("sicNm", "표준산업분류명", "text"),
       bond("crno", "법인등록번호", "text"),
+      // 시세가 존재하는 시장(KTS/일반채권/소액채권) 목록 — bond_price에서 파생되는 값이라
+      // 헤더의 시장 토글과 함께 여기로 왔다(ui-audit ⑥). 시장이 하나뿐인 종목은 토글이
+      // 뜨지 않으므로 이 행이 유일한 표기다.
+      derived("mrktCtg", "시장구분", "text"),
     ],
   },
   {

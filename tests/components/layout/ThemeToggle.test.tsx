@@ -9,7 +9,7 @@ import { THEME_STORAGE_KEY } from "@/lib/theme";
 
 async function choose(screen: Awaited<ReturnType<typeof render>>, label: "시스템" | "라이트" | "다크") {
   await screen.getByRole("button", { name: "테마 전환" }).click();
-  await screen.getByRole("menuitem", { name: label }).click();
+  await screen.getByRole("menuitemradio", { name: label }).click();
 }
 
 describe("ThemeToggle", () => {
@@ -56,6 +56,17 @@ describe("ThemeToggle", () => {
 
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     await expect.poll(() => document.documentElement.classList.contains("dark")).toBe(prefersDark);
+  });
+
+  test("메뉴를 다시 열면 지금 선택된 테마가 aria-checked로 표시된다", async () => {
+    const screen = await render(<ThemeToggle />);
+    await choose(screen, "다크");
+
+    await screen.getByRole("button", { name: "테마 전환" }).click();
+    await expect.element(screen.getByRole("menuitemradio", { name: "다크" })).toHaveAttribute("aria-checked", "true");
+    await expect
+      .element(screen.getByRole("menuitemradio", { name: "라이트" }))
+      .toHaveAttribute("aria-checked", "false");
   });
 
   test("이미 적용된 테마가 있으면 그 상태에서 시작한다", async () => {

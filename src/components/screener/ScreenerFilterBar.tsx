@@ -60,8 +60,19 @@ export function ScreenerFilterBar({
   // ml-auto로 우측 정렬되지 못한다(auto margin은 grow가 끝난 뒤 남은 공간만 쓴다).
   const searchInput = (
     <div className="relative min-w-0 flex-1 md:max-w-sm md:min-w-56">
-      <MagnifyingGlassIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+      <MagnifyingGlassIcon
+        aria-hidden="true"
+        className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+      />
       <Input
+        // type="search"는 모바일 키보드의 검색 키(enterKeyHint와 함께)와 네이티브 지우기(×)
+        // 버튼을 동시에 준다(ui-audit ㉔). 부수 효과로 role이 textbox → searchbox로 바뀌므로
+        // 이 입력을 getByRole("textbox")로 찾지 말 것 — 테스트·E2E는 전부 placeholder로 찾는다.
+        type="search"
+        name="q"
+        autoComplete="off"
+        spellCheck={false}
+        enterKeyHint="search"
         value={filters.q}
         onChange={(e) => patch({ q: e.target.value })}
         placeholder="종목명·발행인·ISIN 검색"
@@ -157,9 +168,9 @@ export function ScreenerFilterBar({
           <CollapsibleTrigger
             className={cn(buttonVariants({ variant: "outline", size: "sm" }), "group shrink-0 gap-1.5 font-normal")}
           >
-            <FunnelIcon />
+            <FunnelIcon aria-hidden="true" />
             필터{activeCount > 0 ? ` ${activeCount}` : ""}
-            <CaretDownIcon className="transition-transform group-data-panel-open:rotate-180" />
+            <CaretDownIcon aria-hidden="true" className="transition-transform group-data-panel-open:rotate-180" />
           </CollapsibleTrigger>
           {countBadge}
         </div>

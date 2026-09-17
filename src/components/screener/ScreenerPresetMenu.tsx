@@ -21,12 +21,16 @@ interface ScreenerPresetMenuProps {
   onApply: (query: string) => void;
 }
 
+/** 덮어쓰기(동명 저장)와 삭제가 공유하는 "실행 전 확인" 대기 상태 — 둘 다 되돌릴 수 없다. */
+type PendingAction =
+  { type: "overwrite"; preset: FilterPreset; name: string } | { type: "delete"; preset: FilterPreset };
+
 /**
  * 이름 붙인 필터 프리셋의 저장·적용·삭제 UI. 상태를 직접 들지 않는 프레젠테이션
  * 컴포넌트이고, 목록의 실제 보관은 `useFilterPresets`가 한다.
  *
- * 동명 저장은 되돌릴 수 없으므로 확인을 받는데, 이 프로젝트엔 `AlertDialog`가 없어
- * 팝오버 안에서 입력 폼을 확인 문구로 갈아 끼우는 2단계 방식으로 처리한다(같은 이름의
+ * 동명 저장·삭제는 되돌릴 수 없으므로 둘 다 확인을 받는데, 이 프로젝트엔 `AlertDialog`가
+ * 없어 팝오버 안에서 입력 폼을 확인 문구로 갈아 끼우는 2단계 방식으로 처리한다(같은 이름의
  * 버튼이 동시에 두 개 뜨지 않게 폼과 확인 블록은 배타적으로 렌더한다). 목록의 각 항목에서
  * 바로 "현재 필터로 덮어쓰기"하는 진입점도 같은 확인 UI로 합류한다 — 재타이핑 없이
  * `preset.name`을 그대로 쓴다는 점만 저장 폼 경로(입력한 이름을 그대로 씀)와 다르다.
@@ -34,14 +38,14 @@ interface ScreenerPresetMenuProps {
 export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, onApply }: ScreenerPresetMenuProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [pendingOverwrite, setPendingOverwrite] = useState<{ preset: FilterPreset; name: string } | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const trimmedName = normalizePresetName(name);
   const duplicate = findPresetByName(presets, trimmedName);
 
   function reset() {
     setName("");
-    setPendingOverwrite(null);
+    setPendingAction(null);
   }
 
   function saveAs(saveName: string) {
@@ -50,8 +54,14 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
   }
 
   function confirmOverwrite() {
-    if (pendingOverwrite === null) return;
-    saveAs(pendingOverwrite.name);
+    if (pendingAction?.type !== "overwrite") return;
+    saveAs(pendingAction.name);
+  }
+
+  function confirmDelete() {
+    if (pendingAction?.type !== "delete") return;
+    onDelete(pendingAction.preset.id);
+    reset();
   }
 
   function handleOpenChange(next: boolean) {
@@ -65,7 +75,7 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
   function submit() {
     if (trimmedName === "") return;
     if (duplicate !== undefined) {
-      setPendingOverwrite({ preset: duplicate, name: trimmedName });
+      setPendingAction({ type: "overwrite", preset: duplicate, name: trimmedName });
       return;
     }
     saveAs(trimmedName);
@@ -79,16 +89,22 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5 font-normal")}>
-        <BookmarkSimpleIcon data-icon="inline-start" />
+        <BookmarkSimpleIcon aria-hidden="true" data-icon="inline-start" />
         <span className={presets.length > 0 ? undefined : "text-muted-foreground"}>
           저장된 필터 {presets.length > 0 ? presets.length : ""}
         </span>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-72 gap-3">
-        {pendingOverwrite === null ? (
+        {pendingAction === null ? (
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <Input
               aria-label="프리셋 이름"
+              // 비밀번호 관리자·브라우저 자동완성이 무엇을 채우는 칸인지 추측하지 않게 명시한다
+              // (ui-audit ㉔). 프리셋 이름은 자유 입력이라 맞춤법 검사도 끈다.
+              type="text"
+              name="presetName"
+              autoComplete="off"
+              spellCheck={false}
               placeholder="현재 필터 이름"
               value={name}
               maxLength={MAX_PRESET_NAME_LENGTH}
@@ -109,20 +125,28 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
               {duplicate === undefined ? "저장" : "덮어쓰기"}
             </Button>
           </form>
-        ) : (
+        ) : pendingAction.type === "overwrite" ? (
           <div className="flex flex-col gap-2">
-            <p className="text-muted-foreground">“{pendingOverwrite.preset.name}” 프리셋을 덮어쓸까요?</p>
+            <p className="text-muted-foreground">“{pendingAction.preset.name}” 프리셋을 덮어쓸까요?</p>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={confirmOverwrite}>
                 덮어쓰기
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setPendingOverwrite(null);
-                }}
-              >
+              <Button size="sm" variant="ghost" onClick={() => setPendingAction(null)}>
+                취소
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <p className="text-muted-foreground">
+              “{pendingAction.preset.name}” 프리셋을 삭제할까요? 이 작업은 되돌릴 수 없습니다.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="destructive" onClick={confirmDelete}>
+                삭제
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setPendingAction(null)}>
                 취소
               </Button>
             </div>
@@ -152,21 +176,20 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
                   size="icon-xs"
                   aria-label={`${preset.name} 덮어쓰기`}
                   onClick={() => {
-                    setPendingOverwrite({ preset, name: preset.name });
+                    setPendingAction({ type: "overwrite", preset, name: preset.name });
                   }}
                 >
-                  <ArrowClockwiseIcon />
+                  <ArrowClockwiseIcon aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-xs"
                   aria-label={`${preset.name} 삭제`}
                   onClick={() => {
-                    onDelete(preset.id);
-                    if (pendingOverwrite?.preset.id === preset.id) setPendingOverwrite(null);
+                    setPendingAction({ type: "delete", preset });
                   }}
                 >
-                  <TrashIcon />
+                  <TrashIcon aria-hidden="true" />
                 </Button>
               </div>
             ))}
