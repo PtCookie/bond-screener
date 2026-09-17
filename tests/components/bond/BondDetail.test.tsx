@@ -103,4 +103,31 @@ describe("BondDetail", () => {
     await expect.element(screen.getByText("시장구분")).toBeInTheDocument();
     await expect.element(screen.getByText("KTS, 일반채권")).toBeInTheDocument();
   });
+
+  // ui-audit ㉖ — 차트 상태(시장·지표·기간) URL 동기화. `useChartViewState`가 URL 복원을
+  // 끝내야 useBondPrices가 요청을 쏘므로(restored 게이트), 첫 요청은 항상 poll로 기다린다.
+  test("기간 토글을 누르면 URL에 range가 반영된다", async () => {
+    const handle = stubPrices();
+    const detail = makeBondDetailResponse();
+    const screen = await render(<BondDetail detail={detail} />);
+    await expect.poll(() => handle.calledUrls.length).toBeGreaterThan(0);
+
+    const periodToggle = screen.getByRole("group", { name: "기간" });
+    await userEvent.click(periodToggle.getByRole("button", { name: "3M" }));
+
+    await expect.poll(() => window.location.search).toContain("range=3M");
+  });
+
+  test("?range=3M&metric=yield로 진입하면 그 상태로 복원된다", async () => {
+    window.history.replaceState(null, "", `${window.location.pathname}?range=3M&metric=yield`);
+    const handle = stubPrices();
+    const detail = makeBondDetailResponse();
+    const screen = await render(<BondDetail detail={detail} />);
+
+    await expect.element(screen.getByRole("button", { name: "3M" })).toHaveAttribute("aria-pressed", "true");
+    await expect.element(screen.getByRole("button", { name: "수익률" })).toHaveAttribute("aria-pressed", "true");
+    // 기본값(1Y)이 아니라 복원된 3M로 딱 한 번만 요청됐는지 — 기본값→복원값 이중 요청이
+    // 없다는 것이 enabled 게이트(useBondPrices의 restored)의 존재 이유다.
+    await expect.poll(() => handle.calledUrls.length).toBe(1);
+  });
 });

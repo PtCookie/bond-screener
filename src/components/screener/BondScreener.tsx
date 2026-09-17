@@ -3,6 +3,7 @@ import { useTable, type PaginationState } from "@tanstack/react-table";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ErrorState } from "@/components/common/ErrorState";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { buttonVariants } from "@/components/ui/button";
 import { useScreenerViewState } from "@/hooks/useScreenerViewState";
 import { useScreenerData } from "@/hooks/useScreenerData";
 import { useFilterPresets } from "@/hooks/useFilterPresets";
@@ -10,6 +11,7 @@ import { toFriendlyErrorMessage } from "@/lib/errorMessage";
 import { applyFilters, buildFilterOptions } from "@/lib/screener/filters";
 import { decodePresetQuery, encodePresetQuery } from "@/lib/screener/presets";
 import type { ScreenerRow, ScreenerStatus } from "@/lib/screener/types";
+import { cn } from "cn";
 import { screenerColumns, screenerFeatures } from "./columns";
 import { ScreenerFilterBar } from "./ScreenerFilterBar";
 import { ScreenerPagination } from "./ScreenerPagination";
@@ -104,6 +106,16 @@ function BondScreenerInner() {
         </div>
       ) : (
         <>
+          {/* 키보드로 정렬 헤더 11개 + 행마다 종목명 링크(최대 100행)를 다 지나지 않고 표를
+              건너뛴다(ui-audit ⑳) — 착지 지점은 ScreenerPagination의 id+tabIndex. 평소엔
+              sr-only, Tab으로 포커스가 오면 일반 흐름에 나타난다(필터바가 sticky라 절대배치는
+              가려질 수 있어 피했다). */}
+          <a
+            href="#screener-pagination"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "sr-only focus:not-sr-only")}
+          >
+            표 건너뛰기
+          </a>
           <div className="overflow-hidden rounded-2xl border">
             <ScreenerTable table={table} isLoading={isPending} onResetFilters={resetFilters} />
           </div>

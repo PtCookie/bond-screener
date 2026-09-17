@@ -10,15 +10,37 @@ import type { BondMarketCategory } from "@/api";
  * `placeholderData: keepPreviousData` — 기간·시장 전환 시 차트가 빈 화면으로 깜빡이지
  * 않고 이전 데이터를 유지한 채 갱신된다.
  */
-function bondPricesQueryOptions(isinCd: string, market: BondMarketCategory, from: number, to: number) {
+function bondPricesQueryOptions(
+  isinCd: string,
+  market: BondMarketCategory,
+  from: number,
+  to: number,
+  enabled: boolean,
+) {
   return queryOptions({
     queryKey: ["bond-prices", isinCd, market, from, to],
     queryFn: () => fetchBondPrices({ isinCd, from, to, market }),
     staleTime: Infinity,
     placeholderData: keepPreviousData,
+    enabled,
   });
 }
 
-export function useBondPrices(isinCd: string, market: BondMarketCategory, from: number, to: number) {
-  return useQuery(bondPricesQueryOptions(isinCd, market, from, to));
+export interface UseBondPricesOptions {
+  /**
+   * 기본값 `true`. `false`면 쿼리를 아예 쏘지 않는다 — `useChartViewState`의 URL 복원이
+   * 끝나기 전에 기본 기간(1Y)으로 한 번, 복원된 기간으로 또 한 번 요청이 나가는 왕복을
+   * 피하기 위한 게이트다(ui-audit ㉖, `PriceChartCard`가 `restored`를 그대로 넘긴다).
+   */
+  enabled?: boolean;
+}
+
+export function useBondPrices(
+  isinCd: string,
+  market: BondMarketCategory,
+  from: number,
+  to: number,
+  options: UseBondPricesOptions = {},
+) {
+  return useQuery(bondPricesQueryOptions(isinCd, market, from, to, options.enabled ?? true));
 }

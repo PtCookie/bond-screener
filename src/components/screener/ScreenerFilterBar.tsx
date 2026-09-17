@@ -65,6 +65,14 @@ export function ScreenerFilterBar({
         className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
       />
       <Input
+        // type="search"는 모바일 키보드의 검색 키(enterKeyHint와 함께)와 네이티브 지우기(×)
+        // 버튼을 동시에 준다(ui-audit ㉔). 부수 효과로 role이 textbox → searchbox로 바뀌므로
+        // 이 입력을 getByRole("textbox")로 찾지 말 것 — 테스트·E2E는 전부 placeholder로 찾는다.
+        type="search"
+        name="q"
+        autoComplete="off"
+        spellCheck={false}
+        enterKeyHint="search"
         value={filters.q}
         onChange={(e) => patch({ q: e.target.value })}
         placeholder="종목명·발행인·ISIN 검색"

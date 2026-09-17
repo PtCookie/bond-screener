@@ -1,6 +1,6 @@
 import type { MouseEvent, CSSProperties } from "react";
 import type { Header, ReactTable, Row } from "@tanstack/react-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { cn } from "cn";
 import { ScreenerEmpty } from "./ScreenerEmpty";
@@ -162,6 +162,9 @@ function DesktopTable({
       style={{ minWidth: `${minWidth}rem` }}
       aria-busy={isLoading}
     >
+      {/* 표에 접근 가능한 이름을 준다(ui-audit ⑳) — HTML은 caption이 table의 첫 자식일 것을
+          요구하므로 colgroup보다 앞에 둔다. sr-only라 화면에는 아무 영향이 없다. */}
+      <TableCaption className="sr-only">채권 목록</TableCaption>
       <colgroup>
         {headers.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />
@@ -239,6 +242,7 @@ function MobileTable({
       style={{ minWidth: `${minWidth}rem` }}
       aria-busy={isLoading}
     >
+      <TableCaption className="sr-only">채권 목록</TableCaption>
       <colgroup>
         {dataHeaders.map((header) => (
           <col key={header.id} style={colWidthStyle(header.column.columnDef.meta?.width)} />

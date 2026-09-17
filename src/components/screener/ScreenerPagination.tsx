@@ -31,7 +31,14 @@ export function ScreenerPagination({ table, totalCount, status = "ready" }: Scre
   const end = Math.min((pageIndex + 1) * pageSize, totalCount);
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2">
+    // id+tabIndex는 "표 건너뛰기" 스킵 링크(BondScreener.tsx)의 착지 지점이다(ui-audit ⑳) —
+    // 프래그먼트 이동만으로는 키보드 포커스가 따라가지 않는 브라우저가 있어 tabIndex={-1}이
+    // 필요하다(표준 스킵 링크 기법). 포커스 링은 기본값 그대로 둬 키보드로 도달했을 때만 보인다.
+    <div
+      id="screener-pagination"
+      tabIndex={-1}
+      className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2"
+    >
       <div className="text-muted-foreground flex items-center gap-2 text-sm">
         {status === "loading" ? (
           <Skeleton className="h-4 w-32" aria-hidden="true" />

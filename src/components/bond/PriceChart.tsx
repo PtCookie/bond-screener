@@ -16,9 +16,11 @@ import {
   type Time,
 } from "lightweight-charts";
 import { useResolvedTheme } from "@/hooks/useTheme";
-import type { PricePoint } from "@/lib/bond/price-series";
+import type { PriceChartMetric, PricePoint } from "@/lib/bond/price-series";
 
-export type PriceChartMetric = "price" | "yield";
+// 기존 import 경로(`@/components/bond/PriceChart`에서 `PriceChartMetric`을 가져오던 곳)를
+// 깨지 않으려는 재노출 — 정의는 `src/lib/bond/price-series.ts`로 옮겼다(chart-view-state.ts와 공유).
+export type { PriceChartMetric };
 
 interface PriceChartProps {
   points: PricePoint[];

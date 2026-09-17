@@ -79,6 +79,15 @@ export function decodePriceSeries(
 export const RANGE_PRESETS = ["1M", "3M", "6M", "1Y", "3Y"] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
+/**
+ * 가격 추이 차트의 지표 토글(종가/수익률). 원래 `PriceChart.tsx`에 있었으나, `chart-view-state.ts`가
+ * lightweight-charts(그 파일이 import하는 모듈)를 끌고 들어오지 않도록 여기로 옮겼다 —
+ * `PriceChart.tsx`는 `export type { PriceChartMetric }`으로 재노출해 기존 import 경로를 유지한다
+ * (`src/lib/screener/format.ts`가 `grade.ts`의 `compareGrade`를 재노출하는 것과 같은 패턴).
+ */
+export const PRICE_CHART_METRICS = ["price", "yield"] as const;
+export type PriceChartMetric = (typeof PRICE_CHART_METRICS)[number];
+
 const RANGE_PRESET_DAYS: Readonly<Record<RangePreset, number>> = {
   "1M": 30,
   "3M": 91,

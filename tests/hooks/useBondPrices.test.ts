@@ -36,6 +36,19 @@ describe("useBondPrices", () => {
     expect(result.current.data?.rows).toEqual(payload.rows);
   });
 
+  test("enabled: false면 요청을 보내지 않는다(ui-audit ㉖ — URL 복원 전 왕복 방지)", async () => {
+    const handle: StubFetchHandle = stubFetch([
+      { match: (url) => url.includes("/api/bond/KR6000011D36/prices"), body: makePayload() },
+    ]);
+
+    const { result } = await renderHookWithQuery(() =>
+      useBondPrices("KR6000011D36", "일반채권", 20260101, 20260828, { enabled: false }),
+    );
+
+    expect(result.current.isPending).toBe(true);
+    expect(handle.calledUrls).toHaveLength(0);
+  });
+
   test("market을 항상 쿼리스트링에 명시한다", async () => {
     const handle: StubFetchHandle = stubFetch([
       { match: (url) => url.includes("/api/bond/KR6000011D36/prices"), body: makePayload() },

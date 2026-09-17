@@ -99,6 +99,12 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
             <Input
               aria-label="프리셋 이름"
+              // 비밀번호 관리자·브라우저 자동완성이 무엇을 채우는 칸인지 추측하지 않게 명시한다
+              // (ui-audit ㉔). 프리셋 이름은 자유 입력이라 맞춤법 검사도 끈다.
+              type="text"
+              name="presetName"
+              autoComplete="off"
+              spellCheck={false}
               placeholder="현재 필터 이름"
               value={name}
               maxLength={MAX_PRESET_NAME_LENGTH}

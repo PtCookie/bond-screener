@@ -5,10 +5,10 @@
  * 채권 기본정보·상태 이력·최신 시세는 `src/pages/bond/[id].astro`가 SSR로 받아 props로
  * 그대로 넘긴다 — 시계열(가격 차트)만 클라이언트에서 별도로 받는다(`PriceChartCard`).
  */
-import { useState } from "react";
 import { BOND_MARKET_CATEGORIES, type BondMarketCategory } from "@/api";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { useChartViewState } from "@/hooks/useChartViewState";
 import type { BondDetailApiResponse } from "@/lib/bond/detail";
 import { BondAllFields } from "./BondAllFields";
 import { BondDetailHeader } from "./BondDetailHeader";
@@ -29,10 +29,18 @@ function BondDetailInner({ detail }: BondDetailProps) {
   // BOND_MARKET_CATEGORIES 선언 순서(KTS → 일반채권 → 소액채권)로 실제 존재하는 시장만.
   const markets: BondMarketCategory[] = BOND_MARKET_CATEGORIES.filter((m) => latestPrices.some((p) => p.mrktCtg === m));
 
-  // 시장 선택은 헤더 토글과 가격 추이 차트가 공유하므로 여기가 소유자다 — 토글 UI는
-  // BondDetailHeader에, 조회는 PriceChartCard에 있다. ㉖(차트 상태 URL 동기화)을 할 때도
-  // 이 자리에서 useScreenerViewState와 같은 replaceState 동기화를 붙이면 된다.
-  const [market, setMarket] = useState<BondMarketCategory>(markets[0] ?? DEFAULT_MARKET);
+  // 시장·기간·지표는 헤더 토글과 가격 추이 차트가 공유하므로 여기가 소유자다 — 시장 토글
+  // UI는 BondDetailHeader에, 조회는 PriceChartCard에 있다. useScreenerViewState와 같은
+  // replaceState 동기화로 URL에 싣는다(ui-audit ㉖).
+  const defaultMarket = markets[0] ?? DEFAULT_MARKET;
+  const {
+    state: chartState,
+    restored: chartRestored,
+    setMarket,
+    setPreset,
+    setMetric,
+  } = useChartViewState(markets, defaultMarket);
+  const market = chartState.market;
 
   return (
     <div className="space-y-6">
@@ -52,7 +60,15 @@ function BondDetailInner({ detail }: BondDetailProps) {
         }))}
       />
 
-      <PriceChartCard isinCd={isinCd} market={market} />
+      <PriceChartCard
+        isinCd={isinCd}
+        market={market}
+        preset={chartState.preset}
+        metric={chartState.metric}
+        onPresetChange={setPreset}
+        onMetricChange={setMetric}
+        enabled={chartRestored}
+      />
 
       {/* 시장구분은 bond/state 어느 컬럼도 아닌 latestPrices 파생값이라 derived로 넘긴다. */}
       <BondFieldSections
