@@ -1,7 +1,10 @@
+# Dependency Resolution
 minimumReleaseAgeExclude:
   - miniflare
   - wrangler
 
+# Build Settings
+verifyDepsBeforeRun: warn
 allowBuilds:
   esbuild: true
   lefthook: true
