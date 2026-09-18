@@ -9,10 +9,14 @@
 // 넘기면 dev 서버와 이 스크립트가 같은 SQLite를 본다 — 경로 전달은
 // `playwright.config.ts`의 `webServer.env.E2E_PERSIST_PATH` → `astro.config.mjs`.
 //
-// **`playwright test`보다 먼저 돌아야 한다**(`package.json`의 `test:e2e`가 `&&`로 묶는다).
-// Playwright는 `webServer`를 `globalSetup`보다 먼저 띄우므로(`playwright@1.62.1`의
-// `createGlobalSetupTasks`가 플러그인 셋업 뒤에 globalSetup을 배치 — dist 실측),
-// globalSetup에서 시드하면 이미 뜬 dev 서버의 Miniflare가 연 SQLite를 갈아엎게 된다.
+// **`playwright test`보다 먼저 돌아야 한다.** Playwright는 `webServer`를 `globalSetup`보다
+// 먼저 띄우므로(`playwright@1.62.1`의 `createGlobalSetupTasks`가 플러그인 셋업 뒤에
+// globalSetup을 배치 — dist 실측), globalSetup에서 시드하면 이미 뜬 dev/preview 서버의
+// Miniflare가 연 SQLite를 갈아엎게 된다. 이 순서 보장은 `.github/workflows/ci.yml`의 e2e
+// job에서 "Seed E2E D1" 스텝이 "Playwright test" 스텝보다 앞에 오는 것으로 확보한다
+// (`package.json`의 `test:e2e`는 `playwright test`만 실행 — 이 스크립트를 자동으로 묶지
+// 않는다). 로컬에서는 자동 실행되지 않으므로, 새로운/최신 E2E 픽스처가 필요할 때 아래를
+// 직접 실행한 뒤 `pnpm run test:e2e`를 돌린다.
 //
 // 사용법: node scripts/seed-e2e.mjs
 
