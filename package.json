@@ -1,6 +1,5 @@
 {
     "name": "bond-screener",
-    "version": "0.0.1",
     "description": "Screener for bond in KRX",
     "keywords": [
         "Astro",
