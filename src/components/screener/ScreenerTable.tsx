@@ -28,6 +28,9 @@ interface ScreenerTableProps {
  */
 const STICKY_FIRST_COL = "group-hover/row:bg-row-hover sticky left-0 z-10 bg-background transition-colors";
 
+/** 헤더용 sticky 1열 — 본문과 달리 행 hover 배경 동기화가 필요 없다(헤더에 그런 hover 상태가 없음). */
+const STICKY_FIRST_COL_HEADER = "sticky left-0 z-10 bg-background";
+
 /**
  * 컬럼 헤더를 상단 sticky로 고정한다. `position: sticky`는 overflow가 visible이 아닌 가장 가까운
  * 조상을 기준으로 동작하는데, `Table`의 가로 스크롤 wrapper(`table-container`, overflow-x-auto)가
@@ -178,13 +181,13 @@ function DesktopTable({
       </colgroup>
       <TableHeader>
         {headerGroups.map((headerGroup) => (
-          <TableRow key={headerGroup.id} className="group/row">
+          <TableRow key={headerGroup.id}>
             {headerGroup.headers.map((header, idx) => (
               <TableHead
                 key={header.id}
                 aria-sort={ariaSortOf(header)}
                 className={cn(
-                  idx === 0 && STICKY_FIRST_COL,
+                  idx === 0 && STICKY_FIRST_COL_HEADER,
                   STICKY_HEADER,
                   header.column.columnDef.meta?.align === "end" && "text-right",
                   header.column.columnDef.meta?.groupStart && "border-l",
