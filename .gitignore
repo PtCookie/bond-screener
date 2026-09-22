@@ -42,3 +42,6 @@ pnpm-debug.log*
 # .vitest-attachments/에 쌓인다.
 __screenshots__/
 /.vitest-attachments/
+
+# codegraph
+.codegraph/

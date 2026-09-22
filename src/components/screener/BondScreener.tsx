@@ -71,9 +71,13 @@ function BondScreenerInner() {
 
   return (
     <div className="space-y-4">
-      {/* 시세 기준일(priceBasDt)이 사용자에게 의미 있는 "오늘 화면에 보이는 날짜"라 우선한다 —
-          bond 정적 필드 기준일(basDt)은 시세보다 갱신이 드물다(주 1회). */}
-      <AppHeader title="채권 스크리너" summary={{ basDt: data?.priceBasDt ?? data?.basDt ?? null, status }} />
+      {/* 두 기준일을 폴백으로 합치지 않고 그대로 넘긴다 — 갱신 주기가 달라(기본정보는 base
+          주 1회 재빌드 + 영업일 델타, 시세는 매 영업일) 하나로 뭉뚱그리면 화면의 날짜가
+          어느 쪽 것인지 알 수 없다. */}
+      <AppHeader
+        title="채권 스크리너"
+        summary={{ basDt: data?.basDt ?? null, priceBasDt: data?.priceBasDt ?? null, status }}
+      />
       {/* 스켈레톤 행은 aria-hidden이라 로딩 사실을 AT에 알리는 건 이 리전 하나다.
           조건부 마운트가 아니라 항상 마운트하고 텍스트만 교체한다 — 리전이 내용과 동시에
           삽입되면 낭독이 일관되지 않는다. 문구에 "건"·"전체"·숫자를 넣지 않는 것은 의도적이다:

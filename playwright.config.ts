@@ -71,15 +71,18 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests */
+  /* Run your local dev server before starting the tests. CI runs against a production preview
+   * build instead of `astro dev` — see AGENTS.md's Tests section for why. */
   webServer: {
-    command: "pnpm run dev",
+    command: process.env.CI ? "pnpm run preview" : "pnpm run dev",
     url: "http://localhost:4321",
     reuseExistingServer: !process.env.CI,
-    // E2E_PERSIST_PATH: astro.config.mjs가 이 값을 어댑터의 persistState로 넘겨 dev 서버가
-    // 개발용 실데이터 D1(.wrangler/state) 대신 E2E 픽스처 DB를 보게 한다. 이 경로에 스키마와
-    // 픽스처를 심는 것은 scripts/seed-e2e.mjs이고, 그 스크립트는 playwright가 webServer를
-    // 띄우기 전에 끝나 있어야 한다(package.json의 test:e2e 참고).
-    env: { ASTRO_DEV_BACKGROUND: "0", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
+    // E2E_PERSIST_PATH: astro.config.mjs가 이 값을 어댑터의 persistState로 넘겨 dev/preview
+    // 서버가 개발용 실데이터 D1(.wrangler/state) 대신 E2E 픽스처 DB를 보게 한다(둘 다 같은
+    // 배선을 탄다 — @astrojs/cloudflare의 preview 엔트리포인트도 astro:config:setup에서 저장한
+    // persistState를 그대로 넘겨받아 dev 전용이 아님을 실측 확인). 이 경로에 스키마와 픽스처를
+    // 심는 것은 scripts/seed-e2e.mjs이고, playwright가 webServer를 띄우기 전에 끝나 있어야
+    // 한다 — CI는 별도 스텝으로(ci.yml), 로컬은 필요할 때 직접 실행한다.
+    env: { ASTRO_DEV_BACKGROUND: "0", ASTRO_PREVIEW_BACKGROUND: "0", E2E_PERSIST_PATH: ".wrangler/e2e-state" },
   },
 });

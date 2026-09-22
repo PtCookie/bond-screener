@@ -13,7 +13,8 @@ test.beforeEach(async ({ page }) => {
 
 test("초기 로드 — 행이 표시되고 헤더에 기준일자가 뜬다", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "채권 스크리너" })).toBeVisible();
-  await expect(page.getByText(/기준일자 \d{4}-\d{2}-\d{2}/)).toBeVisible();
+  // 시세는 픽스처에 한 건도 없어(latestPriceRows: []) "시세 —"가 정상이다 — 기본정보 쪽만 날짜를 본다.
+  await expect(page.getByText(/기본정보 \d{4}-\d{2}-\d{2}/)).toBeVisible();
   // 건수의 유일한 소유자는 필터 바 배지다(ui-audit ⑤) — exact가 없으면 페이지네이션의
   // "1–25 / 전체 30건"에도 부분일치한다.
   await expect(page.getByText("30건", { exact: true })).toBeVisible();

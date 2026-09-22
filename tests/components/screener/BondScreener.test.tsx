@@ -60,7 +60,7 @@ describe("BondScreener", () => {
     await expect.element(screen.getByText("0건", { exact: true })).not.toBeInTheDocument();
     await expect.element(screen.getByText("0–0 / 전체 0건")).not.toBeInTheDocument();
     await expect.element(screen.getByText("1 / 1")).not.toBeInTheDocument();
-    await expect.element(screen.getByText("기준일자 —")).not.toBeInTheDocument();
+    await expect.element(screen.getByText("기본정보 —")).not.toBeInTheDocument();
 
     // 로딩 사실은 라이브 리전이 알린다(스켈레톤 행은 aria-hidden이라 낭독되지 않는다).
     await expect.element(screen.getByText("채권 목록을 불러오는 중입니다.")).toBeInTheDocument();

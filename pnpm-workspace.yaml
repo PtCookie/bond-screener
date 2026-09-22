@@ -1,7 +1,11 @@
+# Dependency Resolution
 minimumReleaseAgeExclude:
   - miniflare
   - wrangler
+  - "@cloudflare/unenv-preset"
 
+# Build Settings
+verifyDepsBeforeRun: warn
 allowBuilds:
   esbuild: true
   lefthook: true
