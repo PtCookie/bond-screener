@@ -4,6 +4,7 @@
  * Astro MPA에서 상세 페이지를 오가도(전체 리로드가 일어나도) 뷰 상태가 살아남게 한다.
  */
 import type { SortingState } from "@tanstack/react-table";
+import { SCREENER_FILTER_DEFS } from "./filter-defs";
 import { EMPTY_FILTERS, type ScreenerFilters } from "./filters";
 
 export interface ScreenerViewState {
@@ -21,7 +22,7 @@ export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
  * 반드시 일치해야 한다 — 순환 import(view-state.ts ↔ columns.tsx)를 피하려고 상수를
  * 중복 정의했다. 컬럼을 추가/삭제할 때 함께 갱신할 것.
  */
-const SORTABLE_COLUMN_IDS = new Set<string>([
+export const SORTABLE_COLUMN_IDS = new Set<string>([
   "isinCdNm",
   "scrsItmsKcdNm",
   "bondIssuDt",
@@ -49,18 +50,29 @@ export function encodeViewState(state: ScreenerViewState): string {
   const params = new URLSearchParams();
   const { filters, sorting, pageIndex, pageSize } = state;
 
-  const q = filters.q.trim();
-  if (q !== "") params.set("q", q);
-  if (filters.grades.length > 0) params.set("grades", filters.grades.join(","));
-  if (filters.intTcds.length > 0) params.set("intTcds", filters.intTcds.join(","));
-  if (filters.markets.length > 0) params.set("markets", filters.markets.join(","));
-  if (filters.kinds.length > 0) params.set("kinds", filters.kinds.join(","));
-  if (filters.exprDtFrom !== null) params.set("exprDtFrom", String(filters.exprDtFrom));
-  if (filters.exprDtTo !== null) params.set("exprDtTo", String(filters.exprDtTo));
-  if (filters.srfcInrtMin !== null) params.set("srfcInrtMin", String(filters.srfcInrtMin));
-  if (filters.srfcInrtMax !== null) params.set("srfcInrtMax", String(filters.srfcInrtMax));
-  if (filters.clprBnfRtMin !== null) params.set("clprBnfRtMin", String(filters.clprBnfRtMin));
-  if (filters.clprBnfRtMax !== null) params.set("clprBnfRtMax", String(filters.clprBnfRtMax));
+  // 파라미터 이름 = `ScreenerFilters`의 키. 이 동일성이 하위호환의 전부다 — 레지스트리
+  // 도입 전 만들어진 링크와 저장된 프리셋이 그대로 디코딩되는 이유가 이것이다.
+  for (const def of SCREENER_FILTER_DEFS) {
+    switch (def.kind) {
+      case "text": {
+        const value = filters[def.valueKey].trim();
+        if (value !== "") params.set(def.valueKey, value);
+        break;
+      }
+      case "multi": {
+        const value = filters[def.valueKey];
+        if (value.length > 0) params.set(def.valueKey, value.join(","));
+        break;
+      }
+      case "range": {
+        const min = filters[def.minKey];
+        const max = filters[def.maxKey];
+        if (min !== null) params.set(def.minKey, String(min));
+        if (max !== null) params.set(def.maxKey, String(max));
+        break;
+      }
+    }
+  }
 
   // 현재 이 화면은 단일 컬럼 정렬만 쓴다(멀티소트 기능 미등록) — sorting[0]만 본다.
   const sort = sorting[0];
@@ -101,19 +113,23 @@ function parseSort(raw: string | null): SortingState {
 export function decodeViewState(input: string | URLSearchParams): ScreenerViewState {
   const params = typeof input === "string" ? new URLSearchParams(input) : input;
 
-  const filters: ScreenerFilters = {
-    q: params.get("q") ?? EMPTY_FILTERS.q,
-    grades: parseList(params.get("grades")),
-    intTcds: parseList(params.get("intTcds")),
-    markets: parseList(params.get("markets")),
-    kinds: parseList(params.get("kinds")),
-    exprDtFrom: parseNumericParam(params.get("exprDtFrom")),
-    exprDtTo: parseNumericParam(params.get("exprDtTo")),
-    srfcInrtMin: parseNumericParam(params.get("srfcInrtMin")),
-    srfcInrtMax: parseNumericParam(params.get("srfcInrtMax")),
-    clprBnfRtMin: parseNumericParam(params.get("clprBnfRtMin")),
-    clprBnfRtMax: parseNumericParam(params.get("clprBnfRtMax")),
-  };
+  // 인코딩과 같은 키 규약으로 되읽는다. 파싱은 전부 parseList/parseNumericParam이
+  // 맡으므로 잘못된 입력은 여기서도 조용히 기본값으로 떨어진다.
+  const filters: ScreenerFilters = { ...EMPTY_FILTERS };
+  for (const def of SCREENER_FILTER_DEFS) {
+    switch (def.kind) {
+      case "text":
+        filters[def.valueKey] = params.get(def.valueKey) ?? "";
+        break;
+      case "multi":
+        filters[def.valueKey] = parseList(params.get(def.valueKey));
+        break;
+      case "range":
+        filters[def.minKey] = parseNumericParam(params.get(def.minKey));
+        filters[def.maxKey] = parseNumericParam(params.get(def.maxKey));
+        break;
+    }
+  }
 
   const sorting = parseSort(params.get("sort"));
 

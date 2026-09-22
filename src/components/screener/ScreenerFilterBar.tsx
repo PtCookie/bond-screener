@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useState } from "react";
 import { CaretDownIcon, FunnelIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -5,13 +6,28 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/useIsMobile";
-import { countActiveFilters, type ScreenerFilterOptions, type ScreenerFilters } from "@/lib/screener/filters";
+import {
+  CHIP_FILTER_DEFS,
+  DEFAULT_VISIBLE_FILTER_IDS,
+  SEARCH_FILTER_DEF,
+  clearFilter,
+  resolveVisibleFilterIds,
+  type ScreenerFilterId,
+} from "@/lib/screener/filter-defs";
+import {
+  countActiveFilters,
+  type ScreenerFilterOption,
+  type ScreenerFilterOptions,
+  type ScreenerFilters,
+} from "@/lib/screener/filters";
 import { cn } from "cn";
 import type { FilterPreset } from "@/lib/screener/presets";
 import type { ScreenerStatus } from "@/lib/screener/types";
-import { ScreenerFilterMultiSelect } from "./ScreenerFilterMultiSelect";
-import { ScreenerFilterRange } from "./ScreenerFilterRange";
+import { ScreenerFilterChip } from "./ScreenerFilterChip";
+import { ScreenerFilterPicker } from "./ScreenerFilterPicker";
 import { ScreenerPresetMenu } from "./ScreenerPresetMenu";
+
+const NO_OPTIONS: ScreenerFilterOption[] = [];
 
 interface ScreenerFilterBarProps {
   filters: ScreenerFilters;
@@ -50,9 +66,31 @@ export function ScreenerFilterBar({
   const isMobile = useIsMobile();
   const activeCount = countActiveFilters(filters);
 
-  function patch(partial: Partial<ScreenerFilters>) {
-    onFiltersChange((prev) => ({ ...prev, ...partial }));
-  }
+  // 어떤 칩을 띄울지는 이 컴포넌트의 로컬 상태다 — URL에도 sessionStorage에도 저장하지
+  // 않는다. 저장 대신 아래 합집합 규칙으로 "값이 있는 필터는 무조건 보인다"를 보장한다.
+  const [visibleIds, setVisibleIds] = useState<readonly ScreenerFilterId[]>(DEFAULT_VISIBLE_FILTER_IDS);
+
+  // 반드시 즉시값 filters로 계산한다(deferred 값으로 계산하면 값보다 한 틱 늦게 칩이 뜬다).
+  const resolvedIds = useMemo(() => resolveVisibleFilterIds(visibleIds, filters), [visibleIds, filters]);
+  // CHIP_FILTER_DEFS를 거르는 형태라 렌더 순서는 언제나 레지스트리 선언 순서다 —
+  // 켠 순서에 따라 칩이 뒤섞이지 않는다.
+  const visibleDefs = useMemo(() => CHIP_FILTER_DEFS.filter((def) => resolvedIds.includes(def.id)), [resolvedIds]);
+
+  const toggleFilterVisibility = useCallback(
+    (id: ScreenerFilterId, visible: boolean) => {
+      setVisibleIds((prev) => (visible ? [...prev, id] : prev.filter((x) => x !== id)));
+      if (visible) return;
+      // 감출 때는 값도 같이 비운다 — 남겨 두면 합집합 규칙이 칩을 즉시 되살릴 뿐 아니라,
+      // 보이지 않는 필터가 결과를 거르는 상태가 된다.
+      const def = CHIP_FILTER_DEFS.find((d) => d.id === id);
+      if (def !== undefined) onFiltersChange((prev) => clearFilter(def, prev));
+    },
+    [onFiltersChange],
+  );
+
+  const resetFilterVisibility = useCallback(() => {
+    setVisibleIds(DEFAULT_VISIBLE_FILTER_IDS);
+  }, []);
 
   // 검색창은 어느 폭에서도 남는 공간을 쓴다(ui-audit ⑩) — 구 w-56(224px)은 pl-9를 빼면 텍스트
   // 영역이 188px뿐이라 placeholder가 잘렸다. 데스크톱에는 하한(14rem)과 상한(24rem)만 둔다:
@@ -74,8 +112,11 @@ export function ScreenerFilterBar({
         spellCheck={false}
         enterKeyHint="search"
         value={filters.q}
-        onChange={(e) => patch({ q: e.target.value })}
-        placeholder="종목명·발행인·ISIN 검색"
+        onChange={(e) => {
+          const { value } = e.target;
+          onFiltersChange((prev) => ({ ...prev, q: value }));
+        }}
+        placeholder={SEARCH_FILTER_DEF.placeholder}
         className="w-full pl-9"
       />
     </div>
@@ -83,51 +124,22 @@ export function ScreenerFilterBar({
 
   const filterControls = (
     <>
-      <ScreenerFilterMultiSelect
-        label="신용등급"
-        options={options.grades}
-        selected={filters.grades}
-        onChange={(grades) => patch({ grades })}
-      />
-      <ScreenerFilterMultiSelect
-        label="이자유형"
-        options={options.intTcds}
-        selected={filters.intTcds}
-        onChange={(intTcds) => patch({ intTcds })}
-      />
-      <ScreenerFilterMultiSelect
-        label="시장구분"
-        options={options.markets}
-        selected={filters.markets}
-        onChange={(markets) => patch({ markets })}
-      />
-      <ScreenerFilterMultiSelect
-        label="종류"
-        options={options.kinds}
-        selected={filters.kinds}
-        onChange={(kinds) => patch({ kinds })}
-      />
+      {visibleDefs.map((def) => (
+        // key는 반드시 def.id — index를 쓰면 칩 제거 시 엉뚱한 칩이 언마운트된다.
+        <ScreenerFilterChip
+          key={def.id}
+          def={def}
+          filters={filters}
+          options={options[def.id] ?? NO_OPTIONS}
+          onFiltersChange={onFiltersChange}
+          onRemove={() => toggleFilterVisibility(def.id, false)}
+        />
+      ))}
 
-      <ScreenerFilterRange
-        label="만기일"
-        inputType="date"
-        min={filters.exprDtFrom}
-        max={filters.exprDtTo}
-        onChange={(exprDtFrom, exprDtTo) => patch({ exprDtFrom, exprDtTo })}
-      />
-      <ScreenerFilterRange
-        label="표면이율(%)"
-        step={0.001}
-        min={filters.srfcInrtMin}
-        max={filters.srfcInrtMax}
-        onChange={(srfcInrtMin, srfcInrtMax) => patch({ srfcInrtMin, srfcInrtMax })}
-      />
-      <ScreenerFilterRange
-        label="수익률(%)"
-        step={0.001}
-        min={filters.clprBnfRtMin}
-        max={filters.clprBnfRtMax}
-        onChange={(clprBnfRtMin, clprBnfRtMax) => patch({ clprBnfRtMin, clprBnfRtMax })}
+      <ScreenerFilterPicker
+        visibleIds={resolvedIds}
+        onToggle={toggleFilterVisibility}
+        onResetVisibility={resetFilterVisibility}
       />
 
       <Button variant="ghost" size="sm" disabled={activeCount === 0} onClick={onReset}>
@@ -174,7 +186,9 @@ export function ScreenerFilterBar({
           </CollapsibleTrigger>
           {countBadge}
         </div>
-        <CollapsibleContent className="flex flex-wrap items-center gap-2 pb-2">{filterControls}</CollapsibleContent>
+        <CollapsibleContent className="flex max-h-[60vh] flex-wrap items-center gap-2 overflow-y-auto pb-2">
+          {filterControls}
+        </CollapsibleContent>
       </Collapsible>
     );
   }

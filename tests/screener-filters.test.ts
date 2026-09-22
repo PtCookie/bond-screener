@@ -59,6 +59,43 @@ describe("applyFilters", () => {
     expect(result.map((r) => r.isinCd)).toEqual(["B"]);
   });
 
+  test("거래량 범위가 활성이면 시세가 없는(trqu: null) 행이 빠진다", () => {
+    // 시세 행이 없는 종목은 mrktCtg·clprPrc·clprVs·clprBnfRt·trqu가 동시에 null이다 —
+    // trquMin: 0은 "아무것도 안 거르는 필터"처럼 보이지만 실제로는 그 종목을 전부 지운다.
+    const rows = [makeRow({ isinCd: "A", trqu: null }), makeRow({ isinCd: "B", trqu: 0 })];
+    const result = applyFilters(rows, { ...EMPTY_FILTERS, trquMin: 0 });
+    expect(result.map((r) => r.isinCd)).toEqual(["B"]);
+  });
+
+  test("채권잔액 범위는 원 단위 경계를 포함한다", () => {
+    const rows = [
+      makeRow({ isinCd: "A", bondBal: 5_000_000_000 }),
+      makeRow({ isinCd: "B", bondBal: 100_000_000 }),
+      makeRow({ isinCd: "C", bondBal: null }),
+    ];
+    const result = applyFilters(rows, { ...EMPTY_FILTERS, balMin: 100_000_000 });
+    expect(result.map((r) => r.isinCd)).toEqual(["A", "B"]);
+  });
+
+  test("전일대비는 음수 하한도 정상 동작한다", () => {
+    const rows = [
+      makeRow({ isinCd: "A", clprVs: -50 }),
+      makeRow({ isinCd: "B", clprVs: 0 }),
+      makeRow({ isinCd: "C", clprVs: 30 }),
+    ];
+    const result = applyFilters(rows, { ...EMPTY_FILTERS, clprVsMin: -10 });
+    expect(result.map((r) => r.isinCd)).toEqual(["B", "C"]);
+  });
+
+  test("발행일 범위가 만기일과 독립적으로 동작한다", () => {
+    const rows = [
+      makeRow({ isinCd: "A", bondIssuDt: 20200101, bondExprDt: 20300101 }),
+      makeRow({ isinCd: "B", bondIssuDt: 20250101, bondExprDt: 20300101 }),
+    ];
+    const result = applyFilters(rows, { ...EMPTY_FILTERS, issuDtFrom: 20240101 });
+    expect(result.map((r) => r.isinCd)).toEqual(["B"]);
+  });
+
   test("여러 필터가 AND로 결합된다", () => {
     const rows = [
       makeRow({ isinCd: "A", kisGrade: "AAA", mrktCtg: "일반채권" }),
@@ -119,5 +156,27 @@ describe("buildFilterOptions", () => {
     ];
     const options = buildFilterOptions(rows);
     expect(options.markets.map((o) => o.code)).toEqual(["KTS", "일반채권", "소액채권"]);
+  });
+
+  // 정본 순서를 "인덱스로 sort"로 구현하면 미지의 값이 조용히 살아남는다 —
+  // 순서만 보는 위 테스트는 그 회귀를 잡지 못하므로 별도로 고정한다.
+  test("시장구분 정본 목록에 없는 값은 선택지에서 버린다", () => {
+    const rows = [makeRow({ isinCd: "A", mrktCtg: "KTS" }), makeRow({ isinCd: "B", mrktCtg: "알수없는시장" })];
+    const options = buildFilterOptions(rows);
+    expect(options.markets.map((o) => o.code)).toEqual(["KTS"]);
+  });
+
+  test("종류 선택지는 라벨(scrsItmsKcdNm)을 쓰되 코드로 집계한다", () => {
+    const rows = [
+      makeRow({ isinCd: "A", scrsItmsKcd: "1101", scrsItmsKcdNm: "국채" }),
+      makeRow({ isinCd: "B", scrsItmsKcd: "1101", scrsItmsKcdNm: "국채" }),
+      makeRow({ isinCd: "C", scrsItmsKcd: "1201", scrsItmsKcdNm: "회사채" }),
+    ];
+    const options = buildFilterOptions(rows);
+    // 건수 내림차순.
+    expect(options.kinds.map((o) => [o.code, o.label, o.count])).toEqual([
+      ["1101", "국채", 2],
+      ["1201", "회사채", 1],
+    ]);
   });
 });

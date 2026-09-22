@@ -157,3 +157,45 @@ test("필터별 해제 — 신용등급만 비우고 검색어 필터는 유지�
   await expect(page.getByText("11건 / 전체 30건")).toBeVisible();
   await expect(page).toHaveURL(/q=/);
 });
+
+test("필터 추가 — 기본은 5개이고, '+'로 켠 칩은 레지스트리 자리에 들어간다", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "이자유형 전체" })).toBeHidden();
+
+  await page.getByRole("button", { name: "필터 추가" }).click();
+  const picker = page.locator('[data-slot="popover-content"]');
+  await picker.getByText("이자유형", { exact: true }).click();
+  await page.keyboard.press("Escape");
+
+  // 이자유형은 레지스트리에서 수익률 다음이므로 기본 5개 뒤에 붙는다.
+  await expect(page.getByRole("button", { name: "이자유형 전체" })).toBeVisible();
+});
+
+test("필터 제거 — 칩을 지우면 그 필터의 값도 URL에서 사라진다", async ({ page }) => {
+  await page.getByRole("button", { name: "필터 추가" }).click();
+  const popover = page.locator('[data-slot="popover-content"]');
+  await popover.getByText("이자유형", { exact: true }).click();
+  await page.keyboard.press("Escape");
+
+  // codeLabelRows가 비어 있어 라벨은 코드("01")로 폴백한다.
+  await page.getByRole("button", { name: "이자유형 전체" }).click();
+  await popover.getByText("01", { exact: true }).click();
+  await expect(page).toHaveURL(/intTcds=01/);
+
+  await popover.getByRole("button", { name: "이자유형 필터 제거" }).click();
+
+  // 칩 트리거의 접근성 이름은 "이자유형 전체"/"이자유형 1" 꼴이다 — 표 헤더의 정렬
+  // 버튼이 정확히 "이자유형"이라 부분일치 정규식으로는 둘을 구분할 수 없다.
+  // 값을 남기면 합집합 규칙이 칩을 즉시 되살릴 뿐 아니라, 보이지 않는 필터가 결과를 거른다.
+  await expect(page.getByRole("button", { name: "이자유형 전체" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "이자유형 1" })).toBeHidden();
+  await expect(page).not.toHaveURL(/intTcds/);
+});
+
+test("값만 있는 링크로 들어와도 해당 칩이 드러난다", async ({ page }) => {
+  // 칩 구성은 URL에 저장하지 않는다 — 대신 "값이 있으면 무조건 보인다"는 합집합 규칙이
+  // 있어야 "값은 걸렸는데 해제할 칩이 없는" 상태가 생기지 않는다.
+  await page.goto("/?intTcds=01");
+
+  await expect(page.getByRole("button", { name: "이자유형 1" })).toBeVisible();
+  await expect(page.getByText("30건", { exact: true })).toBeVisible();
+});
