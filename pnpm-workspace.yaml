@@ -2,6 +2,7 @@
 minimumReleaseAgeExclude:
   - miniflare
   - wrangler
+  - "@cloudflare/unenv-preset"
 
 # Build Settings
 verifyDepsBeforeRun: warn
