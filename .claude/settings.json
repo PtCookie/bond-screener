@@ -29,7 +29,8 @@
     "network": {
       "allowedDomains": [
         "apis.data.go.kr",
-        "api.cloudflare.com"
+        "api.cloudflare.com",
+        "dash.cloudflare.com"
       ]
     },
     "excludedCommands": [
