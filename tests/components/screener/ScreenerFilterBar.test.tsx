@@ -16,6 +16,16 @@ const PRESET_PROPS = {
   onApplyPreset: () => {},
 };
 
+/**
+ * 필터 칩 트리거의 라벨을 DOM 순서대로 뽑는다. 필터 바에는 칩 말고도 팝오버 트리거가
+ * 둘 더 있다 — "+" 피커(아이콘만이라 텍스트가 비어 있다)와 프리셋 메뉴("저장된 필터").
+ */
+function chipTriggerLabels(container: Element): string[] {
+  return [...container.querySelectorAll('[data-slot="popover-trigger"]')]
+    .map((el) => (el.textContent ?? "").trim())
+    .filter((text) => text !== "" && !text.startsWith("저장된 필터"));
+}
+
 // Vitest Browser Mode의 기본 뷰포트(414×896)는 md(768px) 미만이라 모바일 갈래로 렌더된다 —
 // 이 describe의 테스트는 전부 데스크톱(칩이 항상 펼쳐진) 의미이므로 명시적으로 넓힌다.
 describe("ScreenerFilterBar (데스크톱)", () => {
@@ -107,6 +117,116 @@ describe("ScreenerFilterBar (데스크톱)", () => {
     );
     await expect.element(screen.getByText("3건 / 전체 10건")).toBeInTheDocument();
   });
+  // 사용자가 "+"로 무엇을 언제 켜든 기본 5개는 이 순서를 지켜야 한다 — 렌더가
+  // CHIP_FILTER_DEFS를 거르는 형태라 켠 순서가 아니라 레지스트리 순서를 따른다.
+  test("기본 칩은 종류·신용등급·표면이율·만기일·수익률 5개이고 DOM 순서도 그대로다", async () => {
+    const screen = await render(
+      <ScreenerFilterBar
+        filters={EMPTY_FILTERS}
+        options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
+        onFiltersChange={() => {}}
+        onReset={() => {}}
+        resultCount={10}
+        totalCount={10}
+      />,
+    );
+
+    expect(chipTriggerLabels(screen.container)).toEqual([
+      "종류 전체",
+      "신용등급 전체",
+      "표면이율(%)",
+      "만기일",
+      "수익률(%)",
+    ]);
+  });
+
+  test("기본 상태에서는 이자유형·시장구분 칩이 없다", async () => {
+    const screen = await render(
+      <ScreenerFilterBar
+        filters={EMPTY_FILTERS}
+        options={EMPTY_OPTIONS}
+        {...PRESET_PROPS}
+        onFiltersChange={() => {}}
+        onReset={() => {}}
+        resultCount={10}
+        totalCount={10}
+      />,
+    );
+
+    await expect.element(screen.getByRole("button", { name: "이자유형 전체" })).not.toBeInTheDocument();
+    await expect.element(screen.getByRole("button", { name: "시장구분 전체" })).not.toBeInTheDocument();
+  });
+
+  // 칩 구성은 URL에 저장하지 않으므로, 값만 들어오는 경로(URL 복원·프리셋 적용)가 존재한다.
+  // 합집합 규칙이 없으면 "값은 걸렸는데 칩이 없어 해제할 수 없는" 상태가 만들어진다.
+  test("숨겨진 필터라도 값이 들어있으면 칩이 드러난다", async () => {
+    const screen = await render(
+      <ScreenerFilterBar
+        filters={{ ...EMPTY_FILTERS, intTcds: ["01"] }}
+        options={{ ...EMPTY_OPTIONS, intTcds: [{ code: "01", label: "이표채", count: 1 }] }}
+        {...PRESET_PROPS}
+        onFiltersChange={() => {}}
+        onReset={() => {}}
+        resultCount={3}
+        totalCount={10}
+      />,
+    );
+
+    await expect.element(screen.getByRole("button", { name: "이자유형 1" })).toBeInTheDocument();
+  });
+
+  test("피커에서 필터를 켜면 칩이 레지스트리 자리(기본 5개 뒤)에 들어간다", async () => {
+    const screen = await render(
+      <ScreenerFilterBar
+        filters={EMPTY_FILTERS}
+        options={{ ...EMPTY_OPTIONS, markets: [{ code: "KTS", label: "KTS", count: 1 }] }}
+        {...PRESET_PROPS}
+        onFiltersChange={() => {}}
+        onReset={() => {}}
+        resultCount={10}
+        totalCount={10}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "필터 추가" }));
+    await userEvent.click(screen.getByText("시장구분"));
+    await userEvent.keyboard("{Escape}");
+
+    // 이자유형(레지스트리 7번째)은 켜지 않았으므로, 시장구분이 수익률 바로 뒤에 온다.
+    expect(chipTriggerLabels(screen.container)).toEqual([
+      "종류 전체",
+      "신용등급 전체",
+      "표면이율(%)",
+      "만기일",
+      "수익률(%)",
+      "시장구분 전체",
+    ]);
+  });
+
+  test("칩을 제거하면 그 필터의 값도 함께 비워진다", async () => {
+    const onFiltersChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterBar
+        filters={{ ...EMPTY_FILTERS, grades: ["AAA"] }}
+        options={{ ...EMPTY_OPTIONS, grades: [{ code: "AAA", label: "AAA", count: 1 }] }}
+        {...PRESET_PROPS}
+        onFiltersChange={onFiltersChange}
+        onReset={() => {}}
+        resultCount={3}
+        totalCount={10}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "신용등급 1" }));
+    await userEvent.click(screen.getByRole("button", { name: "신용등급 필터 제거" }));
+
+    // 값을 남기면 합집합 규칙이 칩을 즉시 되살릴 뿐 아니라, 보이지 않는 필터가
+    // 결과를 거르는 상태가 된다.
+    const updater = onFiltersChange.mock.calls.at(-1)?.[0] as (prev: ScreenerFilters) => ScreenerFilters;
+    expect(updater({ ...EMPTY_FILTERS, grades: ["AAA"] })).toEqual(EMPTY_FILTERS);
+  });
+
   // 헤더와 같은 규약 — 로딩 중 "0건"은 "진짜 0건"과 구분되지 않는다.
   test("로딩 중에는 결과 건수 배지 대신 스켈레톤을 표시한다", async () => {
     const screen = await render(

@@ -85,6 +85,18 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 - `@custom-variant dark (&:is(.dark, .dark *))` matches the element carrying the class *and* its descendants — the stock `.dark *` would silently no-op any `dark:` utility placed on `<html>` itself.
 - `tests/setup-browser.ts` resets `.dark`/`data-theme` after every test. Without it the class leaks into later tests in the same browser and invalidates the light-theme screenshot baselines in `tests/components/screener/__screenshots__/`.
 
+### Screener filters (registry-driven)
+
+Every screener filter is declared once in `src/lib/screener/filter-defs.ts` (`SCREENER_FILTER_DEFS`), and `applyFilters`/`countActiveFilters`/`buildFilterOptions` (`filters.ts`), `encodeViewState`/`decodeViewState` (`view-state.ts`), and the chip rendering in `ScreenerFilterBar` are all derived from it. **To add a filter: add the key(s) to `ScreenerFilters` and a def to the registry — nothing else.** `tests/screener-filter-defs.test.ts` fails if the two ever drift apart.
+
+- **Three names must stay identical: the def `id`, the `ScreenerFilters` key, and the URL query parameter.** `encodeViewState` uses `def.valueKey`/`minKey`/`maxKey` as the parameter name verbatim, which is the only thing keeping already-shared links and saved presets working. `buildFilterOptions` keys its result by def `id` for the same reason. Renaming any of the three silently breaks the other two.
+- **`ScreenerFilters` stays a flat struct** (not a keyed map) precisely because of the above — `presets.ts` stores an `encodeViewState` query string and therefore needs no changes when filters are added.
+- **The set of visible chips is NOT persisted.** It is local `useState` in `ScreenerFilterBar`, seeded with `DEFAULT_VISIBLE_FILTER_IDS`. What replaces persistence is `resolveVisibleFilterIds` — **a filter holding a value is always shown, even if hidden.** That one rule covers URL restore, sessionStorage restore, and preset apply at once, and makes "a value is filtering the list but there is no chip to clear it with" structurally impossible. Removing a chip must therefore also clear its value (`clearFilter`), or the rule instantly brings it back.
+- **The chip render order is the registry declaration order**, not the order the user enabled them (`CHIP_FILTER_DEFS.filter(...)`). The first five entries are the default-visible ones and their order is pinned by a test.
+- **Multi-select defs compare `getCode`, never `getLabel`.** The table column id is the label (`scrsItmsKcdNm`/`bondIntTcdNm`) while the filter value is the code (`scrsItmsKcd`/`bondIntTcd`); swapping them yields a filter that selects fine and filters nothing.
+- **`priceDerived: true` marks the five fields that come from the price table** (`mrktCtg`·`clprPrc`·`clprVs`·`clprBnfRt`·`trqu`) — an issue with no price row has all five null *at once*, so activating any of them silently drops every such issue. The flag renders a warning line in the popover. Do not "fix" this by changing the range filter's null semantics; that would silently alter 수익률's long-standing behavior.
+- `inputType: "amount"` (채권잔액·거래량) renders a 조/억/만/원 `ToggleGroup`; the stored value and the URL are **always in won**, only the input display is converted, and the conversion must `Math.round` (`0.07 * 1e8 === 7000000.000000001`). Keep range inputs' `aria-label` as `` `${label} 최소` `` — the unit belongs in the caption only, because E2E selectors depend on that exact shape.
+
 ### Data-fetching pattern
 
 Open API calls are isolated in `src/lib/` or `src/api/`. The default pattern is to fetch initial data server-side in an Astro page and pass it to the React island as props.
@@ -190,7 +202,7 @@ src/
     r2/            # R2 key naming, archiving, price delta snapshots
     snapshot/      # Screener list snapshot v2 format, encode, decode, merge, cron build (build.ts), bond delta (bond-delta.ts) (format.ts/encode.ts/index-file.ts do not use the @/ alias)
     mcp/           # MCP server factory (server.ts), the three tool definitions (tools.ts), response formatting (format.ts), access-policy gate (auth.ts — optional auth + rate-limit exemption)
-    screener/     # Screener filter/sort/preset state shape and pure transforms (filters.ts/format.ts/presets.ts/types.ts/view-state.ts), shared by the hook and the components
+    screener/     # Screener filter/sort/preset state shape and pure transforms (filter-defs.ts/filters.ts/format.ts/presets.ts/types.ts/view-state.ts), shared by the hook and the components
     theme.ts       # Theme store — `<html data-theme>` (preference) + `<html class="dark">` (resolved)
     errorMessage.ts # Translates raw fetch/parse errors into user-facing copy (toFriendlyErrorMessage) — `cn` comes directly from the `cn` package now, not from a lib/utils.ts
   pages/

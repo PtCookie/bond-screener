@@ -63,6 +63,39 @@ describe("decodeViewState", () => {
     const result = decodeViewState("page=0");
     expect(result.pageIndex).toBe(DEFAULT_VIEW_STATE.pageIndex);
   });
+
+  // 레지스트리 도입 전에 만들어진 링크·저장된 프리셋이 그대로 살아야 한다.
+  // 파라미터 이름 = ScreenerFilters 키라는 동일성이 그 하위호환의 전부다.
+  test("레지스트리 도입 전 쿼리스트링이 그대로 디코딩된다", () => {
+    const legacy = "q=%EC%82%BC%EC%84%B1&grades=AAA%2CAA%2B&kinds=02&exprDtTo=20301231&srfcInrtMin=1&sort=kisGrade:asc";
+    const result = decodeViewState(legacy);
+    expect(result.filters).toEqual({
+      ...EMPTY_FILTERS,
+      q: "삼성",
+      grades: ["AAA", "AA+"],
+      kinds: ["02"],
+      exprDtTo: 20301231,
+      srfcInrtMin: 1,
+    });
+    expect(result.sorting).toEqual([{ id: "kisGrade", desc: false }]);
+  });
+
+  test("새로 추가된 필터 파라미터를 읽는다", () => {
+    const result = decodeViewState("issuDtFrom=20200101&balMin=100000000&clprPrcMax=10500&clprVsMin=-50&trquMin=0");
+    expect(result.filters).toMatchObject({
+      issuDtFrom: 20200101,
+      balMin: 100000000,
+      clprPrcMax: 10500,
+      clprVsMin: -50,
+      trquMin: 0,
+    });
+  });
+
+  test("칩 구성은 URL에 저장하지 않는다", () => {
+    // 보이는 칩 목록은 ScreenerFilterBar의 로컬 상태다 — 뷰 상태에 새 필드가 생기면
+    // 프리셋·sessionStorage 포맷까지 번지므로 의도적으로 넣지 않았다.
+    expect(Object.keys(decodeViewState("")).sort()).toEqual(["filters", "pageIndex", "pageSize", "sorting"]);
+  });
 });
 
 describe("round-trip", () => {
@@ -81,6 +114,16 @@ describe("round-trip", () => {
         srfcInrtMax: 5.5,
         clprBnfRtMin: 2,
         clprBnfRtMax: 4,
+        issuDtFrom: 20200101,
+        issuDtTo: 20240101,
+        balMin: 100_000_000,
+        balMax: 5_000_000_000,
+        clprPrcMin: 9000,
+        clprPrcMax: 11000,
+        clprVsMin: -100,
+        clprVsMax: 100,
+        trquMin: 0,
+        trquMax: 1_000_000,
       },
       sorting: [{ id: "bondExprDt", desc: false }],
       pageIndex: 3,

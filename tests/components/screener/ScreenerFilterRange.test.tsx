@@ -64,4 +64,97 @@ describe("ScreenerFilterRange", () => {
 
     await expect.element(screen.getByRole("button", { name: "수익률(%) 해제" })).toBeDisabled();
   });
+
+  test("onRemove를 주면 제거 버튼이 생기고, 주지 않으면 없다", async () => {
+    const onRemove = vi.fn();
+    const screen = await render(
+      <ScreenerFilterRange label="거래량" inputType="amount" min={null} max={null} onChange={() => {}} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "거래량" }));
+    await expect.element(screen.getByRole("button", { name: "거래량 필터 제거" })).not.toBeInTheDocument();
+
+    await screen.rerender(
+      <ScreenerFilterRange
+        label="거래량"
+        inputType="amount"
+        min={null}
+        max={null}
+        onChange={() => {}}
+        onRemove={onRemove}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "거래량 필터 제거" }));
+    expect(onRemove).toHaveBeenCalledOnce();
+  });
+
+  test("priceDerived면 시세 없는 종목이 빠진다는 안내를 띄운다", async () => {
+    const screen = await render(
+      <ScreenerFilterRange label="거래량" inputType="amount" min={null} max={null} onChange={() => {}} priceDerived />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "거래량" }));
+    await expect.element(screen.getByText("시세가 없는 종목은 결과에서 제외됩니다.")).toBeInTheDocument();
+  });
+});
+
+// 원 단위 raw 값(5000000000)을 그대로 타이핑하게 하면 0을 세야 해서 쓸 수 없다 —
+// 저장값은 언제나 원 단위로 두고 입력 표기만 환산한다.
+describe("ScreenerFilterRange (amount 단위 환산)", () => {
+  test("억 단위로 열리고 저장값을 나눠서 표시한다", async () => {
+    const screen = await render(
+      <ScreenerFilterRange label="채권잔액" inputType="amount" min={150_000_000} max={null} onChange={() => {}} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "채권잔액" }));
+    await expect.element(screen.getByLabelText("채권잔액 최소")).toHaveValue(1.5);
+  });
+
+  test("입력값에 단위 배수를 곱해 원 단위로 콜백한다", async () => {
+    const onChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterRange label="채권잔액" inputType="amount" min={null} max={null} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "채권잔액" }));
+    await screen.getByLabelText("채권잔액 최소").fill("50");
+
+    expect(onChange).toHaveBeenLastCalledWith(5_000_000_000, null);
+  });
+
+  test("소수 입력도 부동소수 오차 없이 정수로 반올림된다", async () => {
+    // 0.07 * 1e8 === 7000000.000000001 — Math.round가 없으면 이 값이 그대로 URL에 실린다.
+    const onChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterRange label="채권잔액" inputType="amount" min={null} max={null} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "채권잔액" }));
+    await screen.getByLabelText("채권잔액 최소").fill("0.07");
+
+    expect(onChange).toHaveBeenLastCalledWith(7_000_000, null);
+  });
+
+  test("단위를 바꾸면 표시값만 바뀌고 저장값은 그대로다", async () => {
+    const onChange = vi.fn();
+    const screen = await render(
+      <ScreenerFilterRange label="채권잔액" inputType="amount" min={5_000_000_000} max={null} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "채권잔액" }));
+    await expect.element(screen.getByLabelText("채권잔액 최소")).toHaveValue(50);
+
+    await userEvent.click(screen.getByRole("button", { name: "채권잔액 단위 조" }));
+    await expect.element(screen.getByLabelText("채권잔액 최소")).toHaveValue(0.005);
+    // 단위 전환 자체는 값을 바꾸지 않는다.
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  test("이미 조 단위 값이 들어있으면 조 단위로 열린다", async () => {
+    const screen = await render(
+      <ScreenerFilterRange
+        label="채권잔액"
+        inputType="amount"
+        min={3_000_000_000_000}
+        max={null}
+        onChange={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "채권잔액" }));
+    await expect.element(screen.getByLabelText("채권잔액 최소")).toHaveValue(3);
+  });
 });
