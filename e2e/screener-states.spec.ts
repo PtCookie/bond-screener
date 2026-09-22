@@ -25,7 +25,7 @@ test("스냅샷 fetch 실패 시 에러 화면이 뜨고, 재시도하면 정상
   // 실패했는데 "0건"이 남아 있으면 "조회 결과가 없다"로 읽힌다 — 건수·기준일자는 사라져야 한다.
   // (로딩과 달리 스켈레톤도 그리지 않는다. 끝나지 않는 로딩으로 보이기 때문이다.)
   await expect(page.getByText("0건", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("기준일자 —")).toHaveCount(0);
+  await expect(page.getByText("기본정보 —")).toHaveCount(0);
 
   // 정상 응답으로 라우팅을 되돌린 뒤 재시도한다.
   await mockSnapshot(page, makeBonds());
@@ -52,7 +52,9 @@ test("로딩 중에는 건수·기준일자·페이지 번호를 0으로 그리�
   await expect(page.getByText("0건", { exact: true })).toHaveCount(0);
   await expect(page.getByText("0–0 / 전체 0건")).toHaveCount(0);
   await expect(page.getByText("1 / 1")).toHaveCount(0);
-  await expect(page.getByText("기준일자 —")).toHaveCount(0);
+  // 로딩 중에는 두 칸 다 자리바다. release() 뒤에는 시세가 픽스처에 없어 "시세 —"가 정상으로 뜬다.
+  await expect(page.getByText("기본정보 —")).toHaveCount(0);
+  await expect(page.getByText("시세 —")).toHaveCount(0);
 
   release();
 
