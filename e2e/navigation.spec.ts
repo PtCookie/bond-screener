@@ -23,10 +23,13 @@ async function expectDetailOf(page: Page) {
   // (strict mode 위반) — 그래서 아래 검색은 전부 <main>으로 스코프한다.
   const main = page.locator("main");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(FIXTURE.isinCdNm);
-  // 발행인·단축코드는 헤더에서 빠지고(ui-audit ⑱) 발행 개요 카드로 옮겼다 — 헤더에는
-  // 라벨과 함께 ISIN만 남는다.
-  await expect(main.getByText(FIXTURE.isinCd, { exact: true })).toBeVisible();
-  await expect(main.getByText("ISIN", { exact: true })).toBeVisible();
+  // 발행인·단축코드는 헤더에서 빠지고(ui-audit ⑱) 발행 개요 카드로 옮겼다. ISIN은 헤더와
+  // 발행 개요 카드(라벨 "ISIN코드") 양쪽에 의도적으로 중복 표시된다(BondDetailHeader.tsx
+  // 참고) — 그래서 값만으로 main 전체를 찾으면 두 곳에 걸려 strict mode 위반이 난다.
+  // "ISIN"(exact) 라벨은 헤더에만 있으니, 그 라벨의 부모 행으로 좁혀서 헤더 쪽 값만 본다.
+  const headerIsinLabel = main.getByText("ISIN", { exact: true });
+  await expect(headerIsinLabel).toBeVisible();
+  await expect(headerIsinLabel.locator("..").getByText(FIXTURE.isinCd, { exact: true })).toBeVisible();
   // 픽스처(`e2e/fixtures/detail.sql`)가 최신 bas_dt에 KTS·일반채권 두 시장을 함께 갖고
   // 있으므로, 시장 토글과 종가/수익률이 실제 화면에서 어떻게 보이는지까지 확인한다
   // (⑥⑱은 소스만 읽고 올린 항목이라 화면 확인이 안 됐었다 — ui-audit ⚠️). "종가"/"수익률"은
