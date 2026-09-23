@@ -51,7 +51,11 @@ export const DETAIL_SECTIONS: DetailSection[] = [
   {
     title: "발행 개요",
     fields: [
-      bond("isinCdNm", "ISIN코드명", "text"),
+      // isinCdNm(종목 이름)이 아니라 실제 ISIN 코드값 — "ISIN코드명"이라는 라벨이
+      // isinCd(헤더의 ISIN)와 다른 값처럼 오해를 사서 여기로 옮겼다. isinCd는 bond
+      // 응답에 없는 필드(테이블 PK, `ALL_BOND_FIELD_SPECS` 1:1 불변식 대상 밖)라
+      // derived로 호출부(BondDetail)가 넘긴다. isinCdNm 자체는 "전체 항목"에 남는다.
+      derived("isinCd", "ISIN코드", "text"),
       bond("bondIsurNm", "채권발행인명", "text"),
       bond("srtnCd", "단축코드", "text"),
       bond("itmsNm", "종목명", "text"),
@@ -115,8 +119,9 @@ export const CURATED_BOND_KEYS: ReadonlySet<string> = new Set(
 );
 
 /**
- * `bond` 응답의 나머지 전체 필드 라벨·종류 — `isinCd`(헤더에 이미 표시)와 `fp`
- * (`toBondDetailFields`가 응답에서 이미 제외)만 빠져 있다. `CURATED_BOND_KEYS`와 합치면
+ * `bond` 응답의 나머지 전체 필드 라벨·종류 — `isinCd`(bond 컬럼이 아니라 derived로 발행
+ * 개요에 이미 표시)와 `fp`(`toBondDetailFields`가 응답에서 이미 제외)만 빠져 있다.
+ * `CURATED_BOND_KEYS`와 합치면
  * `src/lib/bond/columns.ts`의 `BOND_COLUMNS`(fp 제외 46개)와 정확히 일치해야 한다
  * (`tests/bond-detail-view.test.ts`가 교차 검증).
  */

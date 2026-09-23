@@ -31,7 +31,7 @@
         "snapshot": "node scripts/build-snapshot.mjs",
         "snapshot:local": "node scripts/build-snapshot.mjs --local",
         "db:reset:local": "rm -rf .wrangler/state/v3/d1 .wrangler/state/v3/r2",
-        "seed:local": "pnpm db:migrate:local && node scripts/backfill.mjs apply --source issu --local && node scripts/backfill.mjs apply --source price --local && pnpm snapshot:local",
+        "seed:local": "pnpm db:migrate:local && node scripts/backfill.mjs apply --source issu --local && node scripts/backfill.mjs apply --source price --local && node scripts/backfill.mjs apply --source srtn --local && pnpm snapshot:local",
         "test:browser": "vitest --config=vitest.browser.config.ts",
         "test:e2e": "playwright test",
         "test:e2e:ui": "playwright test --ui"

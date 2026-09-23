@@ -27,7 +27,8 @@ interface BondDetailHeaderProps {
  *
  * 발행인·단축코드는 여기 두지 않는다(ui-audit ⑱) — 라벨 없는 `A · B · C` 가운뎃점 나열은
  * 뒤 두 코드가 무엇인지 알 수 없게 만든다. 둘 다 아래 "발행 개요" 카드에 라벨과 함께 있고,
- * 헤더에는 그 카드에 없는 ISIN만 라벨을 달아 남긴다.
+ * ISIN은 그 카드(라벨 "ISIN코드")와 여기 헤더 양쪽에 중복 표시한다 — 헤더는 빠른 확인용,
+ * 카드는 나머지 필드와 나란한 맥락용.
  */
 export function BondDetailHeader({
   isinCd,

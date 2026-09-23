@@ -70,11 +70,12 @@ function BondDetailInner({ detail }: BondDetailProps) {
         enabled={chartRestored}
       />
 
-      {/* 시장구분은 bond/state 어느 컬럼도 아닌 latestPrices 파생값이라 derived로 넘긴다. */}
+      {/* 시장구분은 bond/state 어느 컬럼도 아닌 latestPrices 파생값, isinCd는 bond
+          응답에 없는 테이블 PK라 둘 다 derived로 넘긴다. */}
       <BondFieldSections
         bond={bond}
         state={state}
-        derived={{ mrktCtg: markets.length > 0 ? markets.join(", ") : null }}
+        derived={{ mrktCtg: markets.length > 0 ? markets.join(", ") : null, isinCd }}
       />
 
       {/* 이력이 1개뿐이면 발행 이후 변경이 없다는 뜻 — 위 섹션에 이미 현재값이 나와 있어

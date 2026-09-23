@@ -5,8 +5,9 @@
 //   node scripts/backfill.mjs discover-range                 시세 API 보존 한계 자동 탐지
 //   node scripts/backfill.mjs fetch issu  --bas-dt 20260820   기본정보 전량 수집(원본만, D1 미적재)
 //   node scripts/backfill.mjs fetch price [--from Y] [--to Y] 시세 월단위 수집(원본만, D1 미적재)
-//   node scripts/backfill.mjs build-sql --source issu|price   원본 → .sql 파일 생성(D1 미적재)
-//   node scripts/backfill.mjs apply --source issu|price [--remote|--local] [--budget 90000]
+//   node scripts/backfill.mjs build-sql --source issu|price|srtn 원본 → .sql 파일 생성(D1 미적재)
+//     srtn은 bond.srtn_cd/itms_nm 충전용 — fetch price가 받아 둔 원본을 재사용한다.
+//   node scripts/backfill.mjs apply --source issu|price|srtn [--remote|--local] [--budget 90000]
 //     --remote는 state.json에 적용 이력·일일 write 예산을 기록/체크한다(D1 free tier 한도 보호).
 //     --local은 그 한도가 없는 Miniflare SQLite라 상태를 읽지도 쓰지도 않고 매번 전체 청크를
 //     전량 적용한다(생성 SQL이 ON CONFLICT DO NOTHING이라 재실행해도 안전).
@@ -34,7 +35,8 @@ import {
 } from "./lib/api-client.mjs";
 import { buildBondRow, buildBondStateRow, buildBondPriceRow, mapBondCodeLabels } from "./lib/mappers.mjs";
 import { BOND_COLUMNS, BOND_STATE_COLUMNS, BOND_PRICE_COLUMNS, CODE_LABEL_COLUMNS } from "./lib/columns.mjs";
-import { buildMultiValuesInsert } from "./lib/sql-gen.mjs";
+import { buildMultiValuesInsert, buildBulkFillUpdate } from "./lib/sql-gen.mjs";
+import { normText } from "./lib/normalize.mjs";
 
 const BACKFILL_DIR = path.join(PROJECT_ROOT, ".backfill");
 const RAW_DIR = path.join(BACKFILL_DIR, "raw");
@@ -54,6 +56,7 @@ function loadState() {
       version: 1,
       price: { retentionFrom: null, fetchedMonths: [], sqlChunks: [] },
       issu: { basDt: null, fetched: false, sqlChunks: [] },
+      srtn: { sqlChunks: [] },
     };
   }
 }
@@ -269,6 +272,8 @@ function readAllJsonItems(dir) {
 }
 
 /**
+ * @param {(rows: readonly (string|number|null)[][]) => string} buildSql 행 슬라이스 하나를
+ *   실행 가능한 SQL 문자열로 직렬화한다(`buildMultiValuesInsert`/`buildBulkFillUpdate`).
  * @param {number} writeMultiplier 이 테이블에 실제 D1 write가 선언 행 수의 몇 배로 잡히는지
  *   (실측 근거). `WITHOUT ROWID` 없이 TEXT PRIMARY KEY를 쓰는 테이블(`bond`)은 SQLite가
  *   암묵적 PK 인덱스를 따로 만들어 2배로 잡힌다(실측: 29,079행 → 58,158 write).
@@ -276,12 +281,12 @@ function readAllJsonItems(dir) {
  *   apply의 사전 예산 체크가 이 값으로 청크별 최악의 경우를 정확히 어림한다 — 배수를
  *   전체에 뭉뚱그려 적용하면 1:1 테이블까지 과도하게 막혀 진행이 안 된다.
  */
-function writeSqlChunks(sqlDir, kind, table, columns, rows, conflictClause, writeMultiplier = 1) {
+function writeSqlChunks(sqlDir, kind, buildSql, rows, writeMultiplier = 1) {
   mkdirSync(sqlDir, { recursive: true });
   const chunks = [];
   for (let i = 0; i < rows.length; i += ROWS_PER_CHUNK) {
     const slice = rows.slice(i, i + ROWS_PER_CHUNK);
-    const sql = buildMultiValuesInsert(table, columns, slice, { conflictClause });
+    const sql = buildSql(slice);
     const file = `${kind}-${String(chunks.length + 1).padStart(4, "0")}.sql`;
     writeFileSync(path.join(sqlDir, file), sql);
     chunks.push({
@@ -318,9 +323,27 @@ function cmdBuildSqlIssu() {
   const sqlDir = path.join(SQL_DIR, "issu");
   const chunks = [
     // bond는 WITHOUT ROWID가 아니라 암묵적 PK 인덱스 때문에 write가 2배로 잡힌다(실측).
-    ...writeSqlChunks(sqlDir, "bond", "bond", BOND_COLUMNS, bondRows, "ON CONFLICT DO NOTHING", 2),
-    ...writeSqlChunks(sqlDir, "state", "bond_state", BOND_STATE_COLUMNS, stateRows, "ON CONFLICT DO NOTHING"),
-    ...writeSqlChunks(sqlDir, "labels", "code_label", CODE_LABEL_COLUMNS, labelRows, "ON CONFLICT DO NOTHING"),
+    ...writeSqlChunks(
+      sqlDir,
+      "bond",
+      (slice) => buildMultiValuesInsert("bond", BOND_COLUMNS, slice, { conflictClause: "ON CONFLICT DO NOTHING" }),
+      bondRows,
+      2,
+    ),
+    ...writeSqlChunks(
+      sqlDir,
+      "state",
+      (slice) =>
+        buildMultiValuesInsert("bond_state", BOND_STATE_COLUMNS, slice, { conflictClause: "ON CONFLICT DO NOTHING" }),
+      stateRows,
+    ),
+    ...writeSqlChunks(
+      sqlDir,
+      "labels",
+      (slice) =>
+        buildMultiValuesInsert("code_label", CODE_LABEL_COLUMNS, slice, { conflictClause: "ON CONFLICT DO NOTHING" }),
+      labelRows,
+    ),
   ];
   state.issu.sqlChunks = chunks;
   saveState(state);
@@ -341,10 +364,90 @@ function cmdBuildSqlPrice() {
 
   const rows = items.map(buildBondPriceRow);
   const sqlDir = path.join(SQL_DIR, "price");
-  const chunks = writeSqlChunks(sqlDir, "c", "bond_price", BOND_PRICE_COLUMNS, rows, "ON CONFLICT DO NOTHING");
+  const chunks = writeSqlChunks(
+    sqlDir,
+    "c",
+    (slice) =>
+      buildMultiValuesInsert("bond_price", BOND_PRICE_COLUMNS, slice, { conflictClause: "ON CONFLICT DO NOTHING" }),
+    rows,
+  );
   state.price.sqlChunks = chunks;
   saveState(state);
   console.log(`SQL 청크 ${chunks.length}개 생성 (총 ${rows.length}행, 청크당 최대 ${ROWS_PER_CHUNK}행)`);
+}
+
+// ---------------------------------------------------------------------------
+// build-sql --source srtn — 시세 원본에서만 오는 bond.srtn_cd/itms_nm을 채우는 UPDATE
+// ---------------------------------------------------------------------------
+
+/**
+ * 초기 백필(`cmdBuildSqlPrice`)은 `bond_price`만 INSERT하고 `bond.srtn_cd`/`itms_nm`은
+ * 채우지 않았다(cron 가동 이후에만 `writeBondPricePage`가 이 두 컬럼을 채운다,
+ * `src/lib/d1/price-repo.ts`). 그래서 cron 가동일(2026-08-22) 이전이 마지막 거래인
+ * 종목은 이 두 컬럼이 영구히 NULL로 남는다 — 이미 받아 둔 `.backfill/raw/price/*.json`
+ * 원본에서 다시 뽑아 채운다(재수집 불필요).
+ */
+function cmdBuildSqlSrtn() {
+  const state = loadState();
+  state.srtn ??= { sqlChunks: [] };
+  if (state.price.fetchedMonths.length === 0) {
+    console.error("먼저 `fetch price`를 실행하세요.");
+    process.exit(1);
+  }
+  const dir = path.join(RAW_DIR, "price");
+  const items = readAllJsonItems(dir);
+  console.log(`시세 ${items.length}건 로드`);
+
+  // readAllJsonItems는 파일명(YYYYMM-pNN.json) 정렬 순서 = basDt 오름차순으로 읽으므로,
+  // Map에 isinCd 키로 덮어쓰면서 진행하면 자연히 "가장 최근 거래일의 값"이 남는다
+  // (cron의 BOND_FILL_SRTN_ITMS_SQL과 달리 최신값 우선 정책은 없지만, 굳이 옛 값을 쓸
+  // 이유가 없어 최신으로 통일한다).
+  const latestByIsin = new Map();
+  for (const item of items) {
+    const isinCd = normText(item.isinCd);
+    const srtnCd = normText(item.srtnCd);
+    const itmsNm = normText(item.itmsNm);
+    if (isinCd === null || srtnCd === null) continue;
+    latestByIsin.set(isinCd, { srtnCd, itmsNm });
+  }
+
+  // idx_bond_srtn_cd가 partial UNIQUE라, 같은 srtnCd가 서로 다른 isinCd에 붙어 있으면
+  // (재상장 등으로 단축코드가 재사용된 극히 드문 경우) UPDATE 문 자체가 제약 위반으로
+  // 전체 실패한다 — 그런 srtnCd는 관련된 isinCd를 전부 빼고 경고만 남긴다.
+  const isinsBySrtn = new Map();
+  for (const [isinCd, { srtnCd }] of latestByIsin) {
+    if (!isinsBySrtn.has(srtnCd)) isinsBySrtn.set(srtnCd, []);
+    isinsBySrtn.get(srtnCd).push(isinCd);
+  }
+  const conflictingSrtnCds = new Set(
+    [...isinsBySrtn.entries()].filter(([, isins]) => isins.length > 1).map(([s]) => s),
+  );
+  if (conflictingSrtnCds.size > 0) {
+    console.warn(`단축코드 충돌 ${conflictingSrtnCds.size}건 — 관련 isinCd를 제외합니다:`);
+    for (const srtnCd of conflictingSrtnCds) {
+      console.warn(`  ${srtnCd}: ${isinsBySrtn.get(srtnCd).join(", ")}`);
+    }
+  }
+
+  const rows = [...latestByIsin.entries()]
+    .filter(([, { srtnCd }]) => !conflictingSrtnCds.has(srtnCd))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([isinCd, { srtnCd, itmsNm }]) => [isinCd, srtnCd, itmsNm]);
+  console.log(`채울 종목 ${rows.length}건 (충돌 제외 ${latestByIsin.size - rows.length}건)`);
+
+  const sqlDir = path.join(SQL_DIR, "srtn");
+  // bond는 TEXT PK(암묵적 PK 인덱스, 2배) + idx_bond_srtn_cd(단축코드 인덱스, +1배)가
+  // 걸린 UPDATE라 writeMultiplier를 issu의 bond INSERT(2배)보다 보수적으로 3배로 잡는다.
+  const chunks = writeSqlChunks(
+    sqlDir,
+    "srtn",
+    (slice) => buildBulkFillUpdate("bond", "isin_cd", ["srtn_cd", "itms_nm"], slice),
+    rows,
+    3,
+  );
+  state.srtn.sqlChunks = chunks;
+  saveState(state);
+  console.log(`SQL 청크 ${chunks.length}개 생성 (총 ${rows.length}행)`);
 }
 
 // ---------------------------------------------------------------------------
@@ -425,7 +528,9 @@ function cmdApply(source, target, budget) {
   // state.json은 build-sql이 만들어 둔 청크 목록(파일 경로·행 수)의 유일한 출처라
   // local도 읽어야 하지만, local 경로는 이 값을 다시 쓰지 않는다(아래 참고).
   const state = loadState();
-  const chunks = (source === "issu" ? state.issu : state.price).sqlChunks ?? [];
+  state.srtn ??= { sqlChunks: [] };
+  const sourceState = source === "issu" ? state.issu : source === "price" ? state.price : state.srtn;
+  const chunks = sourceState.sqlChunks ?? [];
   if (chunks.length === 0) {
     console.error(`적용할 SQL 청크가 없습니다. 먼저 \`build-sql --source ${source}\`를 실행하세요.`);
     process.exit(1);
@@ -502,6 +607,9 @@ function cmdStatus() {
     `\n[시세] 보존한계=${state.price.retentionFrom ?? "(미탐지)"}  수집월=${state.price.fetchedMonths.length}개`,
   );
   summarizeChunks(state.price.sqlChunks);
+
+  console.log(`\n[단축코드/종목명 충전] (시세 원본에서 재추출, 재수집 불필요)`);
+  summarizeChunks(state.srtn?.sqlChunks);
 }
 
 function summarizeChunks(chunks = []) {
@@ -545,8 +653,10 @@ function usage() {
   node scripts/backfill.mjs discover-range
   node scripts/backfill.mjs fetch issu  [--bas-dt YYYYMMDD]
   node scripts/backfill.mjs fetch price [--from YYYYMMDD] [--to YYYYMMDD]
-  node scripts/backfill.mjs build-sql --source issu|price
-  node scripts/backfill.mjs apply --source issu|price [--remote|--local] [--budget 90000]
+  node scripts/backfill.mjs build-sql --source issu|price|srtn
+    srtn: bond.srtn_cd/itms_nm을 이미 받은 price 원본에서 재추출해 채운다(재수집 불필요,
+          먼저 fetch price가 되어 있어야 함).
+  node scripts/backfill.mjs apply --source issu|price|srtn [--remote|--local] [--budget 90000]
     --remote: state.json에 적용 이력·일일 write 예산을 기록/체크한다.
     --local:  상태를 읽지도 쓰지도 않고 매번 전체 청크를 전량 적용한다(--budget 무시).
   node scripts/backfill.mjs status`);
@@ -587,12 +697,13 @@ async function main() {
   if (command === "build-sql") {
     if (flags.source === "issu") cmdBuildSqlIssu();
     else if (flags.source === "price") cmdBuildSqlPrice();
+    else if (flags.source === "srtn") cmdBuildSqlSrtn();
     else usage();
     return;
   }
 
   if (command === "apply") {
-    if (flags.source !== "issu" && flags.source !== "price") usage();
+    if (flags.source !== "issu" && flags.source !== "price" && flags.source !== "srtn") usage();
     const target = flags.local ? "local" : flags.remote ? "remote" : null;
     if (!target) {
       console.error("--remote 또는 --local을 지정하세요.");

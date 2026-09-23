@@ -15,9 +15,14 @@ describe("BondFieldSections", () => {
   });
 
   test("bond 소스 필드는 bond 객체에서 값을 가져온다", async () => {
-    const bond: Record<string, BondDetailField> = { isinCdNm: "테스트채권" };
+    const bond: Record<string, BondDetailField> = { bondIsurNm: "테스트발행인" };
     const screen = await render(<BondFieldSections bond={bond} state={null} />);
-    await expect.element(screen.getByText("테스트채권")).toBeInTheDocument();
+    await expect.element(screen.getByText("테스트발행인")).toBeInTheDocument();
+  });
+
+  test("derived 소스 필드(ISIN코드)는 derived 객체에서 값을 가져온다", async () => {
+    const screen = await render(<BondFieldSections bond={{}} state={null} derived={{ isinCd: "KR1234567890" }} />);
+    await expect.element(screen.getByText("KR1234567890")).toBeInTheDocument();
   });
 
   test("state가 null이면 state 소스 필드(신용등급 등)는 대시로 표시된다", async () => {
