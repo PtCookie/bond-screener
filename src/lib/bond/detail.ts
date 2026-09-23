@@ -12,6 +12,7 @@ import {
   type BondPriceColumn,
   type BondPriceRowRecord,
 } from "./columns";
+import { previousWeekdayYmd } from "@/lib/sync/dates";
 import { codeToMarketCategory } from "./market";
 
 /** `bond_*_yn` 0/1 INTEGER 컬럼 — 응답에서 boolean으로 바꾼다. */
@@ -74,7 +75,10 @@ export interface BondDetailResponse {
   state: Record<string, string | number | null> | null;
   /** `valid_from` 내림차순. 종목당 이력 행 수는 애초에 한 자릿수(`0001_init.sql` 주석). */
   stateHistory: Record<string, string | number | null>[];
-  /** 최신 `bas_dt` 하루치. 같은 날 두 시장에 동시 존재하면 여러 건. */
+  /**
+   * 최신 `bas_dt` 하루치. 같은 날 두 시장에 동시 존재하면 여러 건. `bond_price` 컬럼 외에
+   * 조회 시점에 계산한 `prevBasDt`/`clprBnfRtVs`가 붙는다(`pairPrevPrice` 참고).
+   */
   latestPrices: Record<string, string | number | null>[];
 }
 
@@ -98,13 +102,63 @@ export interface BondDetailApiResponse extends BondDetailResponse {
   srtnCd: string | null;
 }
 
+/** 가격 산식 일치 허용오차 — `clpr_prc`/`clpr_vs`는 소수 둘째 자리까지 온다. */
+const PRICE_EPSILON = 0.005;
+
+/**
+ * `cur`(최신 행)와 같은 시장의 `prevRows` 행이 "전일대비"의 기준이 되는 직전 영업일 행인지
+ * 판정해 그 행을 반환한다. 아니면 `null`.
+ *
+ * API의 `clpr_vs`는 직전 영업일 종가와의 차이이고, 종목이 직전 영업일에 거래되지 않았으면
+ * 항상 0이다(로컬 D1 2026-08 실측: 직전 영업일 행이 있는 2692건은 전부
+ * `clpr_prc(t) − clpr_prc(t−1)`과 일치, 없는 920건은 전부 `clpr_vs = 0`). 그래서 다음 중
+ * 하나면 인정한다:
+ * 1. `prev.bas_dt`가 `cur.bas_dt`의 직전 평일 — 평일 연속 거래.
+ * 2. `clpr_vs ≠ 0`이고 `prev.clpr_prc + clpr_vs = cur.clpr_prc` — 공휴일(달력에 없다)을
+ *    끼고도 API가 이 행을 기준으로 삼았다는 증거. 거래가 끊겼으면 `clpr_vs`가 0이라
+ *    이 조건으로는 들어올 수 없다.
+ *
+ * 연휴 직후이면서 보합(`clpr_vs = 0`)이면 판정 불가로 떨어지지만, 틀린 값 대신 "—"를
+ * 보여주는 쪽으로만 오판한다.
+ */
+export function pairPrevPrice(
+  cur: BondPriceRowRecord,
+  prevRows: readonly BondPriceRowRecord[],
+): BondPriceRowRecord | null {
+  const prev = prevRows.find((p) => p.mrkt_ctg === cur.mrkt_ctg);
+  if (!prev) return null;
+  const curBasDt = cur.bas_dt as number;
+  if (prev.bas_dt === previousWeekdayYmd(curBasDt)) return prev;
+
+  const { clpr_prc: curPrc, clpr_vs: vs } = cur as { clpr_prc: number | null; clpr_vs: number | null };
+  const prevPrc = prev.clpr_prc as number | null;
+  if (vs === null || vs === 0 || curPrc === null || prevPrc === null) return null;
+  return Math.abs(prevPrc + vs - curPrc) < PRICE_EPSILON ? prev : null;
+}
+
+/** 수익률(%) 차이. 부동소수 오차(`4.044 - 4.056 = -0.01200000000000001`)를 0.0001%p 단위로 자른다. */
+function yieldDelta(cur: BondPriceRowRecord, prev: BondPriceRowRecord | null): number | null {
+  const a = cur.clpr_bnf_rt as number | null;
+  const b = prev?.clpr_bnf_rt as number | null | undefined;
+  if (a === null || b === null || b === undefined) return null;
+  return Math.round((a - b) * 1e4) / 1e4;
+}
+
 export function toBondDetailResponse(source: BondDetailSource): BondDetailResponse {
-  const { bond, stateHistory, latestPrices, codeLabels } = source;
+  const { bond, stateHistory, latestPrices, prevPrices, codeLabels } = source;
   return {
     bond: toBondDetailFields(bond, codeLabels),
     state: stateHistory[0] ? toStateFields(stateHistory[0]) : null,
     stateHistory: stateHistory.map(toStateFields),
-    latestPrices: latestPrices.map(toPriceFields),
+    latestPrices: latestPrices.map((row) => {
+      const prev = pairPrevPrice(row, prevPrices);
+      return {
+        ...toPriceFields(row),
+        // `null`이면 전일 비교 불가 — 이때는 API의 `clprVs`(=0)도 "보합"이 아니다.
+        prevBasDt: (prev?.bas_dt as number | undefined) ?? null,
+        clprBnfRtVs: yieldDelta(row, prev),
+      };
+    }),
   };
 }
 

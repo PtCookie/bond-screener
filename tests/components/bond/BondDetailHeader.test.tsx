@@ -45,7 +45,9 @@ describe("BondDetailHeader", () => {
         markets={["일반채권"]}
         market="일반채권"
         onMarketChange={() => {}}
-        latestPrices={[{ mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2 }]}
+        latestPrices={[
+          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2, prevBasDt: 20260827, clprBnfRtVs: null },
+        ]}
       />,
     );
     await expect.element(screen.getByText("10,250")).toBeInTheDocument();
@@ -65,8 +67,8 @@ describe("BondDetailHeader", () => {
         market="일반채권"
         onMarketChange={() => {}}
         latestPrices={[
-          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2 },
-          { mrktCtg: "KTS", clprPrc: 10000, clprVs: -30, clprBnfRt: 3.0 },
+          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2, prevBasDt: 20260827, clprBnfRtVs: null },
+          { mrktCtg: "KTS", clprPrc: 10000, clprVs: -30, clprBnfRt: 3.0, prevBasDt: 20260827, clprBnfRtVs: null },
         ]}
       />,
     );
@@ -81,7 +83,9 @@ describe("BondDetailHeader", () => {
         markets={["일반채권"]}
         market="일반채권"
         onMarketChange={() => {}}
-        latestPrices={[{ mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2 }]}
+        latestPrices={[
+          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2, prevBasDt: 20260827, clprBnfRtVs: null },
+        ]}
       />,
     );
     await expect.element(single.getByRole("group", { name: "시장" })).not.toBeInTheDocument();
@@ -94,8 +98,8 @@ describe("BondDetailHeader", () => {
         market="일반채권"
         onMarketChange={() => {}}
         latestPrices={[
-          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2 },
-          { mrktCtg: "KTS", clprPrc: 10000, clprVs: -30, clprBnfRt: 3.0 },
+          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2, prevBasDt: 20260827, clprBnfRtVs: null },
+          { mrktCtg: "KTS", clprPrc: 10000, clprVs: -30, clprBnfRt: 3.0, prevBasDt: 20260827, clprBnfRtVs: null },
         ]}
       />,
     );
@@ -112,12 +116,47 @@ describe("BondDetailHeader", () => {
         market="일반채권"
         onMarketChange={onMarketChange}
         latestPrices={[
-          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2 },
-          { mrktCtg: "KTS", clprPrc: 10000, clprVs: -30, clprBnfRt: 3.0 },
+          { mrktCtg: "일반채권", clprPrc: 10250, clprVs: 50, clprBnfRt: 3.2, prevBasDt: 20260827, clprBnfRtVs: null },
+          { mrktCtg: "KTS", clprPrc: 10000, clprVs: -30, clprBnfRt: 3.0, prevBasDt: 20260827, clprBnfRtVs: null },
         ]}
       />,
     );
     await userEvent.click(screen.getByRole("button", { name: "KTS" }));
     expect(onMarketChange).toHaveBeenCalledWith("KTS");
+  });
+
+  test("수익률 전일대비는 bp로 표시되고 수익률 방향 기준 톤을 받는다", async () => {
+    const screen = await render(
+      <BondDetailHeader
+        isinCd="KR6000011D36"
+        isinCdNm="테스트채권"
+        markets={["일반채권"]}
+        market="일반채권"
+        onMarketChange={() => {}}
+        latestPrices={[
+          { mrktCtg: "일반채권", clprPrc: 9961, clprVs: 5, clprBnfRt: 4.044, prevBasDt: 20260821, clprBnfRtVs: -0.012 },
+        ]}
+      />,
+    );
+    await expect.element(screen.getByText("-1.2bp")).toHaveClass(/text-price-down/);
+    await expect.element(screen.getByText("+5")).toHaveClass(/text-price-up/);
+  });
+
+  test("전일 비교 불가(prevBasDt=null)면 종가·수익률 전일대비 모두 대시", async () => {
+    const screen = await render(
+      <BondDetailHeader
+        isinCd="KR6000011D36"
+        isinCdNm="테스트채권"
+        markets={["일반채권"]}
+        market="일반채권"
+        onMarketChange={() => {}}
+        latestPrices={[
+          { mrktCtg: "일반채권", clprPrc: 9961, clprVs: 0, clprBnfRt: 4.044, prevBasDt: null, clprBnfRtVs: null },
+        ]}
+      />,
+    );
+    // API는 거래 공백 뒤에도 clprVs=0을 주지만, 보합("0")으로 보이면 안 된다.
+    await expect.element(screen.getByText("0", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText("—").elements()).toHaveLength(2);
   });
 });

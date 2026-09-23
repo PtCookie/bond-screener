@@ -13,6 +13,7 @@ import {
   BOND_BY_ISIN_SQL,
   BOND_ISIN_BY_SRTN_SQL,
   BOND_LATEST_PRICE_SQL,
+  BOND_PREV_PRICE_SQL,
   BOND_STATE_HISTORY_SQL,
   CODE_LABEL_BY_PAIRS_SQL,
 } from "./sql";
@@ -26,6 +27,11 @@ export interface BondDetailSource {
   stateHistory: BondStateRowRecord[];
   /** 최신 `bas_dt` 하루치. 같은 날 KTS·일반채권 두 시장에 동시 존재하면 여러 행. */
   latestPrices: BondPriceRowRecord[];
+  /**
+   * `latestPrices` 바로 앞 날짜 하루치(없으면 빈 배열). 직전 *영업일*이라는 보장은 없다 —
+   * 전일대비로 쓸 수 있는지는 `pairPrevPrice`(`src/lib/bond/detail.ts`)가 판정한다.
+   */
+  prevPrices: BondPriceRowRecord[];
   /** `${domain}:${code}` → label. `bond`에 실제 등장한 코드만 담는다. */
   codeLabels: Map<string, string>;
 }
@@ -38,15 +44,18 @@ export async function resolveIsinCd(db: D1Database, ref: BondRef): Promise<strin
 }
 
 /**
- * 종목 상세 전체를 모은다. `bond`/`bond_state` 이력/최신시세를 `db.batch`로 묶어
+ * 종목 상세 전체를 모은다. `bond`/`bond_state` 이력/최신·직전 시세를 `db.batch`로 묶어
  * 라운드트립 1회로 받고, 그 결과에 실제 등장한 코드만 골라 `code_label`을 조회 1회 더
- * 날린다 — isinCd 해석까지 포함해 요청당 D1 쿼리 3~4개 / 라운드트립 2~3회.
+ * 날린다 — isinCd 해석까지 포함해 요청당 D1 쿼리 4~5개 / 라운드트립 2~3회.
  */
 export async function fetchBondDetail(db: D1Database, isinCd: string): Promise<BondDetailSource | null> {
-  const [bondResult, stateResult, priceResult] = await db.batch<Record<string, string | number | null>>([
+  const [bondResult, stateResult, priceResult, prevPriceResult] = await db.batch<
+    Record<string, string | number | null>
+  >([
     db.prepare(BOND_BY_ISIN_SQL).bind(isinCd),
     db.prepare(BOND_STATE_HISTORY_SQL).bind(isinCd),
     db.prepare(BOND_LATEST_PRICE_SQL).bind(isinCd),
+    db.prepare(BOND_PREV_PRICE_SQL).bind(isinCd),
   ]);
 
   const bond = bondResult.results[0] as BondRowRecord | undefined;
@@ -54,6 +63,7 @@ export async function fetchBondDetail(db: D1Database, isinCd: string): Promise<B
 
   const stateHistory = stateResult.results as BondStateRowRecord[];
   const latestPrices = priceResult.results as BondPriceRowRecord[];
+  const prevPrices = prevPriceResult.results as BondPriceRowRecord[];
 
   const codePairs: [string, string][] = [];
   for (const [column, domain] of Object.entries(CODE_LABEL_DOMAINS) as [BondColumn, string][]) {
@@ -70,5 +80,5 @@ export async function fetchBondDetail(db: D1Database, isinCd: string): Promise<B
     for (const r of rows.results) codeLabels.set(`${r.domain}:${r.code}`, r.label);
   }
 
-  return { bond, stateHistory, latestPrices, codeLabels };
+  return { bond, stateHistory, latestPrices, prevPrices, codeLabels };
 }
