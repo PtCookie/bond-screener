@@ -21,9 +21,15 @@ describe("BondAllFields", () => {
     await expect.element(screen.getByText("테스트스트립스")).toBeInTheDocument();
   });
 
-  test("큐레이션 섹션에 이미 노출된 필드(예: isinCdNm)는 여기 없다", async () => {
+  test("큐레이션 섹션에 이미 노출된 필드(예: bondIsurNm)는 여기 없다", async () => {
+    const screen = await render(<BondAllFields bond={{ bondIsurNm: "테스트발행인" }} />);
+    await userEvent.click(screen.getByRole("button", { name: /전체 항목/ }));
+    await expect.element(screen.getByText("테스트발행인")).not.toBeInTheDocument();
+  });
+
+  test("isinCdNm은 더 이상 큐레이션되지 않으므로 여기 나타난다", async () => {
     const screen = await render(<BondAllFields bond={{ isinCdNm: "테스트채권" }} />);
     await userEvent.click(screen.getByRole("button", { name: /전체 항목/ }));
-    await expect.element(screen.getByText("테스트채권")).not.toBeInTheDocument();
+    await expect.element(screen.getByText("테스트채권")).toBeInTheDocument();
   });
 });
