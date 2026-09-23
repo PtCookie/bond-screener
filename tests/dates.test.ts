@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { isKstWeekend, kstWeekday, kstYmd, previousBusinessDayKst } from "@/lib/sync/dates";
+import { isKstWeekend, kstWeekday, kstYmd, previousBusinessDayKst, previousWeekdayYmd } from "@/lib/sync/dates";
 
 describe("kstYmd / kstWeekday", () => {
   test("UTC 자정 직전은 KST로 다음날이 될 수 있다", () => {
@@ -35,5 +35,25 @@ describe("previousBusinessDayKst", () => {
   test("화요일의 직전 영업일은 월요일", () => {
     const tuesday = new Date("2026-08-25T00:00:00Z");
     expect(previousBusinessDayKst(tuesday)).toBe(20260824);
+  });
+});
+
+describe("previousWeekdayYmd", () => {
+  test("화요일의 직전 평일은 월요일", () => {
+    expect(previousWeekdayYmd(20260825)).toBe(20260824);
+  });
+
+  test("월요일의 직전 평일은 금요일 (주말 건너뜀)", () => {
+    expect(previousWeekdayYmd(20260824)).toBe(20260821);
+  });
+
+  test("월·연 경계를 넘는다", () => {
+    expect(previousWeekdayYmd(20260901)).toBe(20260831);
+    expect(previousWeekdayYmd(20260102)).toBe(20260101); // 2026-01-02 금요일
+    expect(previousWeekdayYmd(20270101)).toBe(20261231); // 2027-01-01 금요일
+  });
+
+  test("공휴일은 반영하지 않는다 — 대체공휴일(2026-08-17 월)도 평일로 센다", () => {
+    expect(previousWeekdayYmd(20260818)).toBe(20260817);
   });
 });

@@ -3,6 +3,7 @@ import type { BondDetailSource } from "@/lib/d1/detail-repo";
 import { BOND_COLUMNS, BOND_PRICE_COLUMNS, BOND_STATE_COLUMNS, type BondRowRecord } from "@/lib/bond/columns";
 import {
   PRICE_SERIES_COLUMNS,
+  pairPrevPrice,
   toBondDetailFields,
   toBondDetailResponse,
   toPriceSeriesResponse,
@@ -88,6 +89,7 @@ describe("toBondDetailResponse", () => {
         buildStateRow({ valid_from: 20260101 }),
       ],
       latestPrices: [],
+      prevPrices: [],
       codeLabels: new Map(),
     };
     const detail = toBondDetailResponse(source);
@@ -101,6 +103,7 @@ describe("toBondDetailResponse", () => {
       bond: buildBondRowRecord(),
       stateHistory: [],
       latestPrices: [],
+      prevPrices: [],
       codeLabels: new Map(),
     };
     expect(toBondDetailResponse(source).state).toBeNull();
@@ -111,10 +114,92 @@ describe("toBondDetailResponse", () => {
       bond: buildBondRowRecord(),
       stateHistory: [],
       latestPrices: [buildPriceRow({ mrkt_ctg: 1 }), buildPriceRow({ mrkt_ctg: 2 })],
+      prevPrices: [],
       codeLabels: new Map(),
     };
     const detail = toBondDetailResponse(source);
     expect(detail.latestPrices.map((p) => p.mrktCtg)).toEqual(["KTS", "일반채권"]);
+  });
+});
+
+describe("pairPrevPrice", () => {
+  // 2026-08-18(화)은 8/17 대체공휴일 다음 날 — 실제 직전 영업일은 8/14(금).
+  test("직전 평일에 같은 시장 행이 있으면 그 행이다", () => {
+    const cur = buildPriceRow({ bas_dt: 20260820, mrkt_ctg: 2, clpr_prc: 9961, clpr_vs: 0 });
+    const prev = buildPriceRow({ bas_dt: 20260819, mrkt_ctg: 2, clpr_prc: 9961 });
+    expect(pairPrevPrice(cur, [prev])).toBe(prev);
+  });
+
+  test("월요일은 직전 금요일 행을 인정한다", () => {
+    const cur = buildPriceRow({ bas_dt: 20260824, mrkt_ctg: 2 });
+    const prev = buildPriceRow({ bas_dt: 20260821, mrkt_ctg: 2 });
+    expect(pairPrevPrice(cur, [prev])).toBe(prev);
+  });
+
+  test("공휴일을 끼어도 clpr_vs ≠ 0이고 가격 산식이 맞으면 인정한다", () => {
+    const cur = buildPriceRow({ bas_dt: 20260818, mrkt_ctg: 2, clpr_prc: 9961, clpr_vs: 5 });
+    const prev = buildPriceRow({ bas_dt: 20260814, mrkt_ctg: 2, clpr_prc: 9956 });
+    expect(pairPrevPrice(cur, [prev])).toBe(prev);
+  });
+
+  test("공휴일을 끼고 clpr_vs = 0이면 판정할 수 없어 null", () => {
+    const cur = buildPriceRow({ bas_dt: 20260818, mrkt_ctg: 2, clpr_prc: 9956, clpr_vs: 0 });
+    const prev = buildPriceRow({ bas_dt: 20260814, mrkt_ctg: 2, clpr_prc: 9956 });
+    expect(pairPrevPrice(cur, [prev])).toBeNull();
+  });
+
+  test("거래 공백 뒤(clpr_vs = 0)의 과거 행은 전일로 보지 않는다", () => {
+    const cur = buildPriceRow({ bas_dt: 20260828, mrkt_ctg: 2, clpr_prc: 9990, clpr_vs: 0 });
+    const prev = buildPriceRow({ bas_dt: 20260810, mrkt_ctg: 2, clpr_prc: 9950 });
+    expect(pairPrevPrice(cur, [prev])).toBeNull();
+  });
+
+  test("가격 산식이 맞지 않으면 clpr_vs ≠ 0이어도 null", () => {
+    const cur = buildPriceRow({ bas_dt: 20260828, mrkt_ctg: 2, clpr_prc: 9990, clpr_vs: 5 });
+    const prev = buildPriceRow({ bas_dt: 20260810, mrkt_ctg: 2, clpr_prc: 9950 });
+    expect(pairPrevPrice(cur, [prev])).toBeNull();
+  });
+
+  test("다른 시장의 행은 짝으로 쓰지 않는다", () => {
+    const cur = buildPriceRow({ bas_dt: 20260820, mrkt_ctg: 1 });
+    const prev = buildPriceRow({ bas_dt: 20260819, mrkt_ctg: 2 });
+    expect(pairPrevPrice(cur, [prev])).toBeNull();
+  });
+});
+
+describe("toBondDetailResponse — 전일대비 파생 필드", () => {
+  function detailWith(latest: ReturnType<typeof buildPriceRow>[], prev: ReturnType<typeof buildPriceRow>[]) {
+    return toBondDetailResponse({
+      bond: buildBondRowRecord(),
+      stateHistory: [],
+      latestPrices: latest,
+      prevPrices: prev,
+      codeLabels: new Map(),
+    });
+  }
+
+  test("인정된 직전 행이 있으면 prevBasDt와 수익률 차이(%p, 부동소수 오차 제거)가 붙는다", () => {
+    const detail = detailWith(
+      [buildPriceRow({ bas_dt: 20260820, clpr_bnf_rt: 4.044 })],
+      [buildPriceRow({ bas_dt: 20260819, clpr_bnf_rt: 4.056 })],
+    );
+    expect(detail.latestPrices[0].prevBasDt).toBe(20260819);
+    expect(detail.latestPrices[0].clprBnfRtVs).toBe(-0.012);
+  });
+
+  test("비교 불가면 prevBasDt·clprBnfRtVs 둘 다 null", () => {
+    const detail = detailWith([buildPriceRow({ bas_dt: 20260820, clpr_bnf_rt: 4.044, clpr_vs: 0 })], []);
+    expect(detail.latestPrices[0].prevBasDt).toBeNull();
+    expect(detail.latestPrices[0].clprBnfRtVs).toBeNull();
+  });
+
+  test("직전 행의 수익률이 null이면 prevBasDt는 남고 clprBnfRtVs만 null", () => {
+    const detail = detailWith(
+      [buildPriceRow({ bas_dt: 20260820, clpr_bnf_rt: 4.044 })],
+      [buildPriceRow({ bas_dt: 20260819, clpr_bnf_rt: null })],
+    );
+    expect(detail.latestPrices[0].prevBasDt).toBe(20260819);
+    expect(detail.latestPrices[0].clprBnfRtVs).toBeNull();
   });
 });
 

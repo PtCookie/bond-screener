@@ -57,6 +57,8 @@ function BondDetailInner({ detail }: BondDetailProps) {
           clprPrc: p.clprPrc as number | null,
           clprVs: p.clprVs as number | null,
           clprBnfRt: p.clprBnfRt as number | null,
+          prevBasDt: p.prevBasDt as number | null,
+          clprBnfRtVs: p.clprBnfRtVs as number | null,
         }))}
       />
 

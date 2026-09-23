@@ -1,7 +1,7 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 import type { BondMarketCategory } from "@/api";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { DASH, deltaTone, fmtDelta, fmtPrice, fmtRate } from "@/lib/screener/format";
+import { DASH, deltaTone, fmtBp, fmtDelta, fmtPrice, fmtRate, type DeltaTone } from "@/lib/screener/format";
 import { cn } from "cn";
 
 interface LatestPriceRow {
@@ -9,6 +9,14 @@ interface LatestPriceRow {
   clprPrc: number | null;
   clprVs: number | null;
   clprBnfRt: number | null;
+  /** 전일대비의 기준이 된 직전 영업일. `null`이면 비교 불가(`pairPrevPrice` 참고). */
+  prevBasDt: number | null;
+  /** 수익률 전일대비(%p). 비교 불가면 `null`. */
+  clprBnfRtVs: number | null;
+}
+
+function toneClass(tone: DeltaTone): string {
+  return tone === "up" ? "text-price-up" : tone === "down" ? "text-price-down" : "text-muted-foreground";
 }
 
 interface BondDetailHeaderProps {
@@ -40,8 +48,10 @@ export function BondDetailHeader({
 }: BondDetailHeaderProps) {
   // 시장은 타일 라벨이 아니라 토글이 소유한다 — 선택된 시장의 시세 한 벌만 크게 보여준다.
   const row = latestPrices.find((p) => p.mrktCtg === market) ?? latestPrices[0];
-  const tone = row ? deltaTone(row.clprVs) : "none";
-  const toneClass = tone === "up" ? "text-price-up" : tone === "down" ? "text-price-down" : "text-muted-foreground";
+  // 직전 영업일에 거래가 없던 종목은 API가 clprVs=0을 준다 — "보합"으로 보이지 않게
+  // 비교 불가(prevBasDt=null)면 대시로 바꾼다.
+  const clprVs = row && row.prevBasDt !== null ? row.clprVs : null;
+  const clprBnfRtVs = row?.clprBnfRtVs ?? null;
 
   return (
     <div className="space-y-4">
@@ -76,23 +86,30 @@ export function BondDetailHeader({
         </ToggleGroup>
       )}
       {row && (
-        // 전일대비(clprVs)는 종가 옆, 수익률(clprBnfRt)은 자기 라벨을 단 별도 값이다
-        // (ui-audit ⑥) — 예전처럼 `-2 (3.811%)`로 묶으면 괄호 안이 "전일대비 변동률"로
-        // 읽히지만 실제로는 수익률이다. 박스(rounded-2xl border)도 없앴다.
+        // 종가·수익률은 각자 라벨을 단 별도 값이고, 전일대비는 각 값 옆에 붙는다(ui-audit ⑥)
+        // — 예전처럼 `-2 (3.811%)`로 묶으면 괄호 안이 "전일대비 변동률"로 읽히지만 실제로는
+        // 수익률이다. 수익률 전일대비는 bp 단위이고, 색은 가격과 같은 방향 규칙(상승=up)을
+        // 따른다 — 그래서 종가와 수익률의 색은 보통 서로 반대로 나온다. 박스도 없앴다.
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
           <div>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-semibold tabular-nums">{fmtPrice(row.clprPrc)}</span>
-              <span className={cn("text-sm font-medium tabular-nums", toneClass)}>
+              <span className={cn("text-sm font-medium tabular-nums", toneClass(deltaTone(clprVs)))}>
                 {/* 화면에는 TradingView처럼 숫자만 두고, 스크린리더에만 무슨 값인지 알린다. */}
                 <span className="sr-only">전일대비 </span>
-                {fmtDelta(row.clprVs)}
+                {fmtDelta(clprVs)}
               </span>
             </div>
             <div className="text-muted-foreground text-xs">종가</div>
           </div>
           <div>
-            <div className="text-3xl font-semibold tabular-nums">{fmtRate(row.clprBnfRt)}</div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-semibold tabular-nums">{fmtRate(row.clprBnfRt)}</span>
+              <span className={cn("text-sm font-medium tabular-nums", toneClass(deltaTone(clprBnfRtVs)))}>
+                <span className="sr-only">전일대비 </span>
+                {fmtBp(clprBnfRtVs)}
+              </span>
+            </div>
             <div className="text-muted-foreground text-xs">수익률</div>
           </div>
         </div>

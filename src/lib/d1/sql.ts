@@ -124,6 +124,20 @@ export const BOND_LATEST_PRICE_SQL =
   `WHERE isin_cd = ?1 AND bas_dt = (SELECT MAX(bas_dt) FROM bond_price WHERE isin_cd = ?1);`;
 
 /**
+ * 종목의 "직전" 시세 — 최신 `bas_dt` 바로 앞 날짜 하루치 전부(시장별 여러 행 가능).
+ * 상세 헤더의 수익률 전일대비 계산용(`src/lib/bond/detail.ts`의 `pairPrevPrice`).
+ * 이 날짜가 정말 "직전 영업일"인지는 여기서 판단하지 않는다 — 종목이 거래되지 않은 날은
+ * 행이 없어서 몇 주 전 행이 올 수도 있으니, 판정은 호출부 몫이다.
+ * 모든 단계가 `(isin_cd, bas_dt)` PK 시크라 보조 인덱스가 필요 없다. `?1`에 isin_cd.
+ */
+export const BOND_PREV_PRICE_SQL =
+  `SELECT ${BOND_PRICE_COLUMNS.join(", ")} FROM bond_price\n` +
+  `WHERE isin_cd = ?1 AND bas_dt = (\n` +
+  `  SELECT MAX(bas_dt) FROM bond_price\n` +
+  `  WHERE isin_cd = ?1 AND bas_dt < (SELECT MAX(bas_dt) FROM bond_price WHERE isin_cd = ?1)\n` +
+  `);`;
+
+/**
  * 종목 시계열 — 날짜 범위(포함) + 선택적 시장 필터. `bond_price` PK가
  * `(isin_cd, bas_dt, mrkt_ctg)`라 `isin_cd` 등호 + `bas_dt` 범위는 보조 인덱스 없이
  * PK 레인지 스캔이 된다(`0002_indexes.sql` 주석 참고). `LIMIT`은 호출부가 상수로 건다.

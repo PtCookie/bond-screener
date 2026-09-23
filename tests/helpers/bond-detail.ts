@@ -37,6 +37,8 @@ export interface BondDetailFixtureOptions {
   stateHistory?: Partial<BondStateRecord>[];
   /** 기본값 1건(일반채권 시세). 빈 배열을 넘기면 시세 없음 케이스가 된다. */
   latestPrices?: Partial<BondPriceRecord>[];
+  /** 기본값 없음(직전 시세 없음 → 전일대비 비교 불가). */
+  prevPrices?: Partial<BondPriceRecord>[];
   codeLabels?: Map<string, string>;
 }
 
@@ -49,6 +51,7 @@ export function makeBondDetailResponse(options: BondDetailFixtureOptions = {}): 
     bond: buildBondRowRecord({ isin_cd: isinCd, ...options.bond }),
     stateHistory: stateHistory.map((s) => buildStateRow({ isin_cd: isinCd, ...s })),
     latestPrices: latestPrices.map((p) => buildPriceRow({ isin_cd: isinCd, ...p })),
+    prevPrices: (options.prevPrices ?? []).map((p) => buildPriceRow({ isin_cd: isinCd, ...p })),
     codeLabels: options.codeLabels ?? new Map(),
   };
 

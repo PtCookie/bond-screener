@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { writeBondPage } from "@/lib/d1/bond-repo";
 import { writeBondPricePage } from "@/lib/d1/price-repo";
 import { fetchBondDetail, resolveIsinCd } from "@/lib/d1/detail-repo";
+import { BOND_PREV_PRICE_SQL } from "@/lib/d1/sql";
 import { resetD1 } from "./helpers/reset-d1";
 import { buildIssuItem, buildPriceItem } from "./helpers/envelope";
 
@@ -76,5 +77,33 @@ describe("fetchBondDetail", () => {
     const result = await fetchBondDetail(env.DB, ISIN);
     expect(result?.latestPrices).toHaveLength(1);
     expect(result?.latestPrices[0].bas_dt).toBe(20260828);
+  });
+
+  test("prevPrices는 최신 bas_dt 바로 앞 날짜 하루치(전 시장)만 담는다", async () => {
+    await writeBondPage(env.DB, [buildIssuItem({ isinCd: ISIN })], 20260828);
+    await writeBondPricePage(env.DB, [buildPriceItem({ isinCd: ISIN, basDt: "20260810", srtnCd: "000001D3" })]);
+    await writeBondPricePage(env.DB, [
+      buildPriceItem({ isinCd: ISIN, basDt: "20260827", mrktCtg: "KTS", srtnCd: "000001D3" }),
+      buildPriceItem({ isinCd: ISIN, basDt: "20260827", mrktCtg: "일반채권", srtnCd: "000001D3" }),
+    ]);
+    await writeBondPricePage(env.DB, [buildPriceItem({ isinCd: ISIN, basDt: "20260828", srtnCd: "000001D3" })]);
+
+    const result = await fetchBondDetail(env.DB, ISIN);
+    expect(result?.prevPrices.map((p) => p.bas_dt)).toEqual([20260827, 20260827]);
+  });
+
+  test("시세가 하루치뿐이면 prevPrices는 빈 배열", async () => {
+    await writeBondPage(env.DB, [buildIssuItem({ isinCd: ISIN })], 20260828);
+    await writeBondPricePage(env.DB, [buildPriceItem({ isinCd: ISIN, basDt: "20260828", srtnCd: "000001D3" })]);
+
+    const result = await fetchBondDetail(env.DB, ISIN);
+    expect(result?.prevPrices).toEqual([]);
+  });
+
+  test("직전 시세 쿼리는 bond_price를 PK 시크로만 읽는다 (회귀 방지 — SCAN이면 560k행 전량 스캔)", async () => {
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${BOND_PREV_PRICE_SQL}`).bind(ISIN).all<{ detail: string }>();
+    const details = plan.results.map((r) => r.detail).filter((d) => d.includes("bond_price"));
+    expect(details.length).toBeGreaterThan(0);
+    for (const d of details) expect(d).not.toMatch(/^SCAN/);
   });
 });

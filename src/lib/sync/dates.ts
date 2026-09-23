@@ -48,3 +48,16 @@ export function previousBusinessDayKst(date: Date): number {
   } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6);
   return toYmd(cursor);
 }
+
+/**
+ * YYYYMMDD 정수 기준 직전 평일(주말만 제외, 공휴일 미반영). 시각대와 무관한 순수 달력
+ * 계산이라 KST 변환을 거치지 않는다 — 상세 헤더가 "전일" 시세 행을 판정할 때 쓴다
+ * (`src/lib/bond/detail.ts`의 `pairPrevPrice`).
+ */
+export function previousWeekdayYmd(ymd: number): number {
+  const cursor = new Date(Date.UTC(Math.floor(ymd / 10000), (Math.floor(ymd / 100) % 100) - 1, ymd % 100));
+  do {
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6);
+  return toYmd(cursor);
+}

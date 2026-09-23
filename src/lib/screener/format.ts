@@ -42,6 +42,17 @@ export function fmtDelta(v: number | null): string {
   return "0";
 }
 
+/**
+ * 수익률 차이(%p)를 bp로 표시한다. 0.01%p = 1bp, 소수 첫째 자리까지. 음수는 `fmtDelta`와
+ * 같은 ASCII 하이픈을 쓴다. 반올림 결과가 0이면 부호 없이 "0bp".
+ */
+export function fmtBp(v: number | null): string {
+  if (v === null) return DASH;
+  const bp = Math.round(v * 1000) / 10;
+  if (bp === 0) return "0bp";
+  return `${bp > 0 ? "+" : ""}${bp.toFixed(1)}bp`;
+}
+
 export type DeltaTone = "up" | "down" | "flat" | "none";
 
 export function deltaTone(v: number | null): DeltaTone {
