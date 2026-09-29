@@ -98,6 +98,14 @@ Every screener filter is declared once in `src/lib/screener/filter-defs.ts` (`SC
 - **`priceDerived: true` marks the five fields that come from the price table** (`mrktCtg`·`clprPrc`·`clprVs`·`clprBnfRt`·`trqu`) — an issue with no price row has all five null *at once*, so activating any of them silently drops every such issue. The flag renders a warning line in the popover. Do not "fix" this by changing the range filter's null semantics; that would silently alter 수익률's long-standing behavior.
 - `inputType: "amount"` (채권잔액·거래량) renders a 조/억/만/원 `ToggleGroup`; the stored value and the URL are **always in won**, only the input display is converted, and the conversion must `Math.round` (`0.07 * 1e8 === 7000000.000000001`). Keep range inputs' `aria-label` as `` `${label} 최소` `` — the unit belongs in the caption only, because E2E selectors depend on that exact shape.
 
+### Bookmarks
+
+Per-issue bookmarks (the star before the issue name, in the screener's name cell and the detail header) live in localStorage `bond-screener:bookmarks` as a versioned envelope `{version:1, bookmarks:[{isinCd, name, addedAt}]}`. `src/lib/bookmarks.ts` is pure (format, validation, toggle), `src/lib/bookmark-store.ts` is an external store read through `useSyncExternalStore` by `src/hooks/useBookmarks.ts` — same "no Provider" reasoning as the theme store, since both islands and every table cell must see the same value.
+
+- **"Show bookmarks only" is `ScreenerViewState.bookmarked` (URL `bookmarked=1`), not a `ScreenerFilters` key.** Registry predicates only see a row, and this condition needs the external bookmark set, so `BondScreener` filters rows *before* `applyFilters`. It is pinned as the first entry of the "저장된 필터" popover (`북마크 (N)`); applying it clears filters and keeps sorting, applying a regular preset or "초기화" turns it off, and preset queries never carry it.
+- **The store caches its snapshot** (a fresh object per `getSnapshot` would loop forever) and invalidates it on its own writes, cross-tab `storage` events, and bfcache restore (`pageshow` with `persisted`). The server snapshot is empty — `BondDetail` is `client:load`, so the star hydrates unpressed and flips after hydration. `tests/setup-browser.ts` calls `resetBookmarkStoreForTests()` because clearing localStorage alone leaves the module cache behind.
+- **Export/import groundwork**: `sanitizeBookmarks`/`serializeBookmarks` (`bookmarks.ts`) and `sanitizePresets`/`serializePresets` (`presets.ts`) validate already-parsed values independent of storage, and `replaceBookmarks` is the store's single write entry point — a future export bundle should be built from these rather than re-implementing validation.
+
 ### Data-fetching pattern
 
 Open API calls are isolated in `src/lib/` or `src/api/`. The default pattern is to fetch initial data server-side in an Astro page and pass it to the React island as props.
@@ -205,6 +213,7 @@ src/
     snapshot/      # Screener list snapshot v2 format, encode, decode, merge, cron build (build.ts), bond delta (bond-delta.ts) (format.ts/encode.ts/index-file.ts do not use the @/ alias)
     mcp/           # MCP server factory (server.ts), the three tool definitions (tools.ts), response formatting (format.ts), access-policy gate (auth.ts — optional auth + rate-limit exemption)
     screener/     # Screener filter/sort/preset state shape and pure transforms (filter-defs.ts/filters.ts/format.ts/presets.ts/types.ts/view-state.ts), shared by the hook and the components
+    bookmarks.ts   # Bookmark storage format + pure ops (bookmark-store.ts is the useSyncExternalStore-backed store)
     theme.ts       # Theme store — `<html data-theme>` (preference) + `<html class="dark">` (resolved)
     errorMessage.ts # Translates raw fetch/parse errors into user-facing copy (toFriendlyErrorMessage) — `cn` comes directly from the `cn` package now, not from a lib/utils.ts
   pages/

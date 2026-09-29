@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { ArrowClockwiseIcon, BookmarkSimpleIcon, TrashIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, BookmarkSimpleIcon, StarIcon, TrashIcon } from "@phosphor-icons/react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,6 +19,9 @@ interface ScreenerPresetMenuProps {
   onSave: (name: string, query: string) => void;
   onDelete: (id: string) => void;
   onApply: (query: string) => void;
+  /** 목록 맨 위에 고정되는 "북마크 (N)" 항목용. 덮어쓰기·삭제 대상이 아니다. */
+  bookmarkCount: number;
+  onApplyBookmarks: () => void;
 }
 
 /** 덮어쓰기(동명 저장)와 삭제가 공유하는 "실행 전 확인" 대기 상태 — 둘 다 되돌릴 수 없다. */
@@ -35,7 +38,15 @@ type PendingAction =
  * 바로 "현재 필터로 덮어쓰기"하는 진입점도 같은 확인 UI로 합류한다 — 재타이핑 없이
  * `preset.name`을 그대로 쓴다는 점만 저장 폼 경로(입력한 이름을 그대로 씀)와 다르다.
  */
-export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, onApply }: ScreenerPresetMenuProps) {
+export function ScreenerPresetMenu({
+  presets,
+  currentQuery,
+  onSave,
+  onDelete,
+  onApply,
+  bookmarkCount,
+  onApplyBookmarks,
+}: ScreenerPresetMenuProps) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -152,6 +163,21 @@ export function ScreenerPresetMenu({ presets, currentQuery, onSave, onDelete, on
             </div>
           </div>
         )}
+
+        <Separator />
+
+        {/* 고정 항목 — 사용자 프리셋과 달리 쿼리가 아니라 뷰 상태(bookmarked)를 켠다. */}
+        <button
+          type="button"
+          className="hover:bg-muted flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-left"
+          onClick={() => {
+            onApplyBookmarks();
+            handleOpenChange(false);
+          }}
+        >
+          <StarIcon aria-hidden="true" weight="fill" className="text-bookmark size-4 shrink-0" />
+          <span className="flex-1 truncate">북마크 ({bookmarkCount.toLocaleString("ko-KR")})</span>
+        </button>
 
         <Separator />
 

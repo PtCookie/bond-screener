@@ -7,6 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { useScreenerViewState } from "@/hooks/useScreenerViewState";
 import { useScreenerData } from "@/hooks/useScreenerData";
 import { useFilterPresets } from "@/hooks/useFilterPresets";
+import { useBookmarks } from "@/hooks/useBookmarks";
 import { toFriendlyErrorMessage } from "@/lib/errorMessage";
 import { applyFilters, buildFilterOptions } from "@/lib/screener/filters";
 import { decodePresetQuery, encodePresetQuery } from "@/lib/screener/presets";
@@ -23,8 +24,21 @@ function BondScreenerInner() {
   const { data, isPending, isError, error, refetch } = useScreenerData();
   const rows = data?.rows ?? EMPTY_ROWS;
 
-  const { state, setFilters, setSorting, setPagination, applyFiltersAndSorting, resetFilters } = useScreenerViewState();
+  const {
+    state,
+    setFilters,
+    setSorting,
+    setPagination,
+    applyFiltersAndSorting,
+    applyBookmarks,
+    setBookmarked,
+    resetFilters,
+  } = useScreenerViewState();
   const { presets, savePreset, deletePreset } = useFilterPresets();
+  const { bookmarks, bookmarkedIds } = useBookmarks();
+  const clearBookmarked = useCallback(() => {
+    setBookmarked(false);
+  }, [setBookmarked]);
 
   // 프리셋에 싣는 값은 deferredFilters가 아니라 state.filters다 — 지연 값은 렌더링 부하를
   // 미루기 위한 것이라, 저장 버튼을 누른 시점의 화면 입력과 한 틱 어긋날 수 있다.
@@ -43,7 +57,13 @@ function BondScreenerInner() {
   // 검색창 입력은 즉시 echo해야 하므로 state.filters 그대로 바인딩하고, 29k행 재필터링처럼
   // 무거운 계산만 지연시킨다 — 타이핑이 렌더링에 막히지 않는다.
   const deferredFilters = useDeferredValue(state.filters);
-  const filteredRows = useMemo(() => applyFilters(rows, deferredFilters), [rows, deferredFilters]);
+  // 북마크 보기는 레지스트리 밖의 조건이라 applyFilters 앞에서 먼저 거른다(view-state.ts 참고).
+  // 보기 중에 별을 끄면 bookmarkedIds가 바뀌어 그 행이 곧바로 빠진다.
+  const baseRows = useMemo(
+    () => (state.bookmarked ? rows.filter((row) => bookmarkedIds.has(row.isinCd)) : rows),
+    [rows, state.bookmarked, bookmarkedIds],
+  );
+  const filteredRows = useMemo(() => applyFilters(baseRows, deferredFilters), [baseRows, deferredFilters]);
   // 선택지는 필터 결과가 아니라 원본 전체 기준 — 필터를 좁힐 때마다 다른 선택지가
   // 사라지면 다중선택을 넓히기 어려워진다.
   const filterOptions = useMemo(() => buildFilterOptions(rows), [rows]);
@@ -100,6 +120,10 @@ function BondScreenerInner() {
         onSavePreset={savePreset}
         onDeletePreset={deletePreset}
         onApplyPreset={applyPreset}
+        bookmarked={state.bookmarked}
+        bookmarkCount={bookmarks.length}
+        onApplyBookmarks={applyBookmarks}
+        onClearBookmarked={clearBookmarked}
         resultCount={filteredRows.length}
         totalCount={rows.length}
         status={status}
@@ -121,7 +145,12 @@ function BondScreenerInner() {
             표 건너뛰기
           </a>
           <div className="overflow-hidden rounded-2xl border">
-            <ScreenerTable table={table} isLoading={isPending} onResetFilters={resetFilters} />
+            <ScreenerTable
+              table={table}
+              isLoading={isPending}
+              onResetFilters={resetFilters}
+              emptyMessage={state.bookmarked ? "북마크한 채권이 없습니다." : undefined}
+            />
           </div>
           <ScreenerPagination table={table} totalCount={filteredRows.length} status={status} />
         </>

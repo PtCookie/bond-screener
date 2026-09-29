@@ -22,6 +22,8 @@ function renderMenu(overrides: Partial<React.ComponentProps<typeof ScreenerPrese
       onSave={() => {}}
       onDelete={() => {}}
       onApply={() => {}}
+      bookmarkCount={0}
+      onApplyBookmarks={() => {}}
       {...overrides}
     />,
   );
@@ -54,6 +56,41 @@ describe("목록", () => {
     await userEvent.click(popover().getByRole("button", { name: "고금리", exact: true }));
 
     expect(onApply).toHaveBeenCalledExactlyOnceWith("srfcInrtMin=5");
+    await expect.poll(() => document.querySelector('[data-slot="popover-content"]')).toBeNull();
+  });
+});
+
+describe("북마크 고정 항목", () => {
+  test("프리셋 목록보다 앞에 북마크 개수와 함께 표시되고, 트리거 숫자는 프리셋만 센다", async () => {
+    const screen = await renderMenu({ bookmarkCount: 12 });
+    await expect.element(screen.getByRole("button", { name: /저장된 필터 2/ })).toBeInTheDocument();
+    await openMenu(screen);
+
+    const bookmark = popover().getByRole("button", { name: "북마크 (12)" });
+    await expect.element(bookmark).toBeInTheDocument();
+    const first = bookmark.element();
+    const preset = popover().getByRole("button", { name: "국채 단기물", exact: true }).element();
+    expect(first.compareDocumentPosition(preset) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 덮어쓰기·삭제 대상이 아니다.
+    await expect.element(popover().getByRole("button", { name: /북마크.*(삭제|덮어쓰기)/ })).not.toBeInTheDocument();
+  });
+
+  test("프리셋이 없어도 북마크 항목은 보인다", async () => {
+    const screen = await renderMenu({ presets: [], bookmarkCount: 0 });
+    await openMenu(screen);
+    await expect.element(popover().getByRole("button", { name: "북마크 (0)" })).toBeInTheDocument();
+  });
+
+  test("클릭하면 onApplyBookmarks가 호출되고 팝오버가 닫힌다", async () => {
+    const onApplyBookmarks = vi.fn();
+    const onApply = vi.fn();
+    const screen = await renderMenu({ bookmarkCount: 3, onApplyBookmarks, onApply });
+    await openMenu(screen);
+
+    await userEvent.click(popover().getByRole("button", { name: "북마크 (3)" }));
+
+    expect(onApplyBookmarks).toHaveBeenCalledOnce();
+    expect(onApply).not.toHaveBeenCalled();
     await expect.poll(() => document.querySelector('[data-slot="popover-content"]')).toBeNull();
   });
 });

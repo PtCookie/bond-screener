@@ -58,6 +58,8 @@
        위 텍스트로 쓰면 실측 대비 2.60:1로 WCAG AA(4.5:1)에 못 미친다 — 그래서 재활용하지
        않는다. 라이트는 --primary와 같은 값이라 원 색상 그대로다. */
     --link: var(--primary);
+    /* 북마크(별) 활성색. 가격 상승(빨강)·브랜드(녹색)와 섞이지 않는 앰버. */
+    --bookmark: oklch(0.666 0.179 58.318);
 }
 
 .dark {
@@ -98,6 +100,7 @@
     /* --sidebar-primary와 같은 값 — 다크 팔레트에서 이미 "배경 위 밝은 브랜드색 텍스트"
        용도로 검증된 라이트니스다(다크 배경 대비 실측 8.00:1). */
     --link: oklch(0.696 0.17 162.48);
+    --bookmark: oklch(0.828 0.189 84.429);
 }
 
 @theme inline {
@@ -138,6 +141,7 @@
     --color-price-down: var(--price-down);
     --color-row-hover: var(--row-hover);
     --color-link: var(--link);
+    --color-bookmark: var(--bookmark);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);

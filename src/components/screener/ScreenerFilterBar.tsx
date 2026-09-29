@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { CaretDownIcon, FunnelIcon, MagnifyingGlassIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, FunnelIcon, MagnifyingGlassIcon, StarIcon, XIcon } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -40,6 +40,11 @@ interface ScreenerFilterBarProps {
   onSavePreset: (name: string, query: string) => void;
   onDeletePreset: (id: string) => void;
   onApplyPreset: (query: string) => void;
+  /** 북마크 보기 — `ScreenerFilters`가 아니라 뷰 상태 필드라 따로 받는다(`view-state.ts` 참고). */
+  bookmarked: boolean;
+  bookmarkCount: number;
+  onApplyBookmarks: () => void;
+  onClearBookmarked: () => void;
   resultCount: number;
   totalCount: number;
   /**
@@ -59,12 +64,17 @@ export function ScreenerFilterBar({
   onSavePreset,
   onDeletePreset,
   onApplyPreset,
+  bookmarked,
+  bookmarkCount,
+  onApplyBookmarks,
+  onClearBookmarked,
   resultCount,
   totalCount,
   status = "ready",
 }: ScreenerFilterBarProps) {
   const isMobile = useIsMobile();
-  const activeCount = countActiveFilters(filters);
+  // 북마크 보기도 결과를 거르는 조건이라 개수·"초기화" 활성화에 함께 센다.
+  const activeCount = countActiveFilters(filters) + (bookmarked ? 1 : 0);
 
   // 어떤 칩을 띄울지는 이 컴포넌트의 로컬 상태다 — URL에도 sessionStorage에도 저장하지
   // 않는다. 저장 대신 아래 합집합 규칙으로 "값이 있는 필터는 무조건 보인다"를 보장한다.
@@ -124,6 +134,22 @@ export function ScreenerFilterBar({
 
   const filterControls = (
     <>
+      {/* 북마크 보기가 켜져 있으면 언제나 해제 수단이 보여야 한다 — 칩의 "값이 있으면 보인다"
+          규칙(resolveVisibleFilterIds)과 같은 원칙. 칩 전체가 해제 버튼이다. */}
+      {bookmarked && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 font-normal"
+          aria-label="북마크 보기 해제"
+          onClick={onClearBookmarked}
+        >
+          <StarIcon aria-hidden="true" weight="fill" data-icon="inline-start" className="text-bookmark" />
+          북마크만
+          <XIcon aria-hidden="true" data-icon="inline-end" />
+        </Button>
+      )}
+
       {visibleDefs.map((def) => (
         // key는 반드시 def.id — index를 쓰면 칩 제거 시 엉뚱한 칩이 언마운트된다.
         <ScreenerFilterChip
@@ -152,6 +178,8 @@ export function ScreenerFilterBar({
         onSave={onSavePreset}
         onDelete={onDeletePreset}
         onApply={onApplyPreset}
+        bookmarkCount={bookmarkCount}
+        onApplyBookmarks={onApplyBookmarks}
       />
     </>
   );
