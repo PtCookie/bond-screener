@@ -14,6 +14,10 @@ const PRESET_PROPS = {
   onSavePreset: () => {},
   onDeletePreset: () => {},
   onApplyPreset: () => {},
+  bookmarked: false,
+  bookmarkCount: 0,
+  onApplyBookmarks: () => {},
+  onClearBookmarked: () => {},
 };
 
 /**

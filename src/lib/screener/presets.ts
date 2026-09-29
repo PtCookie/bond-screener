@@ -93,7 +93,7 @@ export function removePreset(presets: FilterPreset[], id: string): FilterPreset[
   return presets.filter((p) => p.id !== id);
 }
 
-function isFilterPreset(value: unknown): value is FilterPreset {
+export function isFilterPreset(value: unknown): value is FilterPreset {
   if (typeof value !== "object" || value === null) return false;
   const o = value as Record<string, unknown>;
   return (
@@ -125,9 +125,17 @@ export function parsePresets(raw: string | null): FilterPreset[] {
   if (typeof parsed !== "object" || parsed === null) return [];
   const envelope = parsed as Record<string, unknown>;
   if (envelope.version !== FORMAT_VERSION) return [];
-  if (!Array.isArray(envelope.presets)) return [];
+  return sanitizePresets(envelope.presets);
+}
 
-  return envelope.presets.filter(isFilterPreset).slice(0, MAX_PRESETS);
+/**
+ * 임의 값에서 유효한 프리셋만 추린다(배열이 아니면 빈 목록). 스토리지 문자열이 아니라
+ * 이미 파싱된 값을 받으므로, 나중에 붙일 export/import가 같은 검증을 그대로 재사용한다
+ * (`bookmarks.ts`의 `sanitizeBookmarks`와 짝).
+ */
+export function sanitizePresets(value: unknown): FilterPreset[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isFilterPreset).slice(0, MAX_PRESETS);
 }
 
 export function serializePresets(presets: FilterPreset[]): string {

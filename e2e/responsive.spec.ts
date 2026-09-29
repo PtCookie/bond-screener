@@ -24,7 +24,8 @@ test("종목명 열이 가로 스크롤 중에도 sticky로 남는다", async ({
   await mockSnapshot(page, makeBonds(3));
   await page.goto("/");
 
-  const nameCell = page.getByText("유일채권0").locator("..");
+  // 링크 → 별 버튼과 묶는 flex 래퍼 → sticky div(MobileTable의 이름 행). 두 단계 위가 sticky다.
+  const nameCell = page.getByText("유일채권0").locator("../..");
   await expect(nameCell).toHaveCSS("position", "sticky");
 });
 

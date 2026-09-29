@@ -93,8 +93,32 @@ describe("decodeViewState", () => {
 
   test("칩 구성은 URL에 저장하지 않는다", () => {
     // 보이는 칩 목록은 ScreenerFilterBar의 로컬 상태다 — 뷰 상태에 새 필드가 생기면
-    // 프리셋·sessionStorage 포맷까지 번지므로 의도적으로 넣지 않았다.
-    expect(Object.keys(decodeViewState("")).sort()).toEqual(["filters", "pageIndex", "pageSize", "sorting"]);
+    // 프리셋·sessionStorage 포맷까지 번지므로 의도적으로 넣지 않았다. (bookmarked는 결과를
+    // 거르는 조건이라 URL에 싣는다 — 프리셋에는 싣지 않는다, screener-presets.test.ts 참고.)
+    expect(Object.keys(decodeViewState("")).sort()).toEqual([
+      "bookmarked",
+      "filters",
+      "pageIndex",
+      "pageSize",
+      "sorting",
+    ]);
+  });
+});
+
+describe("bookmarked", () => {
+  test("기본값 false는 파라미터를 만들지 않는다", () => {
+    expect(encodeViewState(DEFAULT_VIEW_STATE)).toBe("");
+  });
+
+  test("true는 bookmarked=1로 인코딩되고 되읽힌다", () => {
+    const state: ScreenerViewState = { ...DEFAULT_VIEW_STATE, bookmarked: true };
+    expect(encodeViewState(state)).toBe("bookmarked=1");
+    expect(decodeViewState(encodeViewState(state))).toEqual(state);
+  });
+
+  test("1 이외의 값은 false로 폴백한다", () => {
+    expect(decodeViewState("bookmarked=true").bookmarked).toBe(false);
+    expect(decodeViewState("bookmarked=").bookmarked).toBe(false);
   });
 });
 
@@ -128,6 +152,7 @@ describe("round-trip", () => {
       sorting: [{ id: "bondExprDt", desc: false }],
       pageIndex: 3,
       pageSize: 100,
+      bookmarked: true,
     };
     expect(decodeViewState(encodeViewState(state))).toEqual(state);
   });

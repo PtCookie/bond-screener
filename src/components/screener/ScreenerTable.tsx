@@ -19,6 +19,8 @@ interface ScreenerTableProps {
   isLoading: boolean;
   /** 필터가 걸린 상태로 0건이 된 경우에만 넘긴다 — ScreenerEmpty의 "필터 초기화" 버튼용. */
   onResetFilters?: () => void;
+  /** 0건일 때의 안내 문구(북마크 보기 등). 생략하면 `ScreenerEmpty` 기본 문구. */
+  emptyMessage?: string;
 }
 
 /**
@@ -337,13 +339,13 @@ function MobileTable({
   );
 }
 
-export function ScreenerTable({ table, isLoading, onResetFilters }: ScreenerTableProps) {
+export function ScreenerTable({ table, isLoading, onResetFilters, emptyMessage }: ScreenerTableProps) {
   const isMobile = useIsMobile();
 
   // 로딩 중에는 표를 통째로 다른 컴포넌트로 갈아끼우지 않고 본문만 스켈레톤으로 채운다 —
   // 헤더·컬럼 폭·sticky가 진짜 그대로라 데이터가 도착해도 표 모양이 변하지 않는다.
   const rows = isLoading ? [] : table.getRowModel().rows;
-  if (!isLoading && rows.length === 0) return <ScreenerEmpty onResetFilters={onResetFilters} />;
+  if (!isLoading && rows.length === 0) return <ScreenerEmpty onResetFilters={onResetFilters} message={emptyMessage} />;
 
   return isMobile ? (
     <MobileTable table={table} rows={rows} isLoading={isLoading} />

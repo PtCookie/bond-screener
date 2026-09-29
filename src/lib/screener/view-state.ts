@@ -12,6 +12,13 @@ export interface ScreenerViewState {
   sorting: SortingState;
   pageIndex: number;
   pageSize: number;
+  /**
+   * 북마크한 종목만 보기. `ScreenerFilters`가 아니라 여기 두는 이유: 필터 레지스트리의
+   * 술어는 행 하나만 보는 순수 함수인데, 이 조건은 외부 집합(북마크 목록)이 있어야 판정된다.
+   * 그래서 `applyFilters` **앞에서** 행을 먼저 거른다(`BondScreener`). 프리셋 쿼리
+   * (`encodePresetQuery`)에는 실리지 않는다 — 프리셋 적용은 이 값을 끈다.
+   */
+  bookmarked: boolean;
 }
 
 /** `ScreenerPagination`의 페이지 크기 선택지. 여기를 정본으로 두고 컴포넌트가 가져다 쓴다. */
@@ -42,13 +49,14 @@ export const DEFAULT_VIEW_STATE: ScreenerViewState = {
   sorting: [{ id: "trqu", desc: true }],
   pageIndex: 0,
   pageSize: 25,
+  bookmarked: false,
 };
 
 const DEFAULT_SORT = DEFAULT_VIEW_STATE.sorting[0];
 
 export function encodeViewState(state: ScreenerViewState): string {
   const params = new URLSearchParams();
-  const { filters, sorting, pageIndex, pageSize } = state;
+  const { filters, sorting, pageIndex, pageSize, bookmarked } = state;
 
   // 파라미터 이름 = `ScreenerFilters`의 키. 이 동일성이 하위호환의 전부다 — 레지스트리
   // 도입 전 만들어진 링크와 저장된 프리셋이 그대로 디코딩되는 이유가 이것이다.
@@ -84,6 +92,7 @@ export function encodeViewState(state: ScreenerViewState): string {
 
   if (pageIndex !== DEFAULT_VIEW_STATE.pageIndex) params.set("page", String(pageIndex + 1));
   if (pageSize !== DEFAULT_VIEW_STATE.pageSize) params.set("size", String(pageSize));
+  if (bookmarked) params.set("bookmarked", "1");
 
   return params.toString();
 }
@@ -145,5 +154,7 @@ export function decodeViewState(input: string | URLSearchParams): ScreenerViewSt
     ? parsedSize
     : DEFAULT_VIEW_STATE.pageSize;
 
-  return { filters, sorting, pageIndex, pageSize };
+  const bookmarked = params.get("bookmarked") === "1";
+
+  return { filters, sorting, pageIndex, pageSize, bookmarked };
 }

@@ -32,8 +32,12 @@ export interface UseScreenerViewStateResult {
   setFilters: (updater: ScreenerFilters | ((prev: ScreenerFilters) => ScreenerFilters)) => void;
   setSorting: (updater: Updater<SortingState>) => void;
   setPagination: (updater: Updater<PaginationState>) => void;
-  /** 필터와 정렬을 한 번에 교체한다(프리셋 적용 경로). */
+  /** 필터와 정렬을 한 번에 교체한다(프리셋 적용 경로). 북마크 보기는 끈다. */
   applyFiltersAndSorting: (filters: ScreenerFilters, sorting: SortingState) => void;
+  /** 필터를 비우고 북마크한 종목만 보이게 한다(정렬은 유지). */
+  applyBookmarks: () => void;
+  setBookmarked: (bookmarked: boolean) => void;
+  /** 필터와 북마크 보기를 함께 해제한다. */
   resetFilters: () => void;
 }
 
@@ -122,14 +126,34 @@ export function useScreenerViewState(): UseScreenerViewStateResult {
   // 중간 상태가 잠깐 URL에 남는다 — 한 번의 updateState로 처리한다.
   const applyFiltersAndSorting = useCallback(
     (filters: ScreenerFilters, sorting: SortingState) => {
-      updateState((prev) => ({ ...prev, filters, sorting, pageIndex: 0 }));
+      updateState((prev) => ({ ...prev, filters, sorting, pageIndex: 0, bookmarked: false }));
+    },
+    [updateState],
+  );
+
+  const applyBookmarks = useCallback(() => {
+    updateState((prev) => ({ ...prev, filters: EMPTY_FILTERS, pageIndex: 0, bookmarked: true }));
+  }, [updateState]);
+
+  const setBookmarked = useCallback(
+    (bookmarked: boolean) => {
+      updateState((prev) => ({ ...prev, pageIndex: 0, bookmarked }));
     },
     [updateState],
   );
 
   const resetFilters = useCallback(() => {
-    setFilters(EMPTY_FILTERS);
-  }, [setFilters]);
+    updateState((prev) => ({ ...prev, filters: EMPTY_FILTERS, pageIndex: 0, bookmarked: false }));
+  }, [updateState]);
 
-  return { state, setFilters, setSorting, setPagination, applyFiltersAndSorting, resetFilters };
+  return {
+    state,
+    setFilters,
+    setSorting,
+    setPagination,
+    applyFiltersAndSorting,
+    applyBookmarks,
+    setBookmarked,
+    resetFilters,
+  };
 }

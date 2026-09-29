@@ -2,6 +2,7 @@
 // 자동 cleanup을 제공하므로 여기서 별도 afterEach(cleanup)이 필요 없다.
 import { afterEach } from "vitest";
 import "@/styles/global.css";
+import { resetBookmarkStoreForTests } from "@/lib/bookmark-store";
 
 // useScreenerViewState(src/hooks/useScreenerViewState.ts)가 window.history.replaceState로
 // 테스트 iframe의 URL을 실제로 바꾸고 sessionStorage에 쓴다. useFilterPresets는 같은
@@ -22,4 +23,7 @@ afterEach(() => {
     // 일부 브라우저 설정(프라이빗 모드 등)에서 스토리지 접근이 막힐 수 있다 — 실제 앱
     // 코드(useScreenerViewState/useFilterPresets)도 같은 이유로 이 접근을 try/catch로 감싼다.
   }
+  // 북마크 스토어는 파싱 결과를 모듈에 캐시한다 — 스토리지를 비운 뒤 캐시도 버려야 다음
+  // 테스트가 앞 테스트의 북마크를 보지 않는다.
+  resetBookmarkStoreForTests();
 });

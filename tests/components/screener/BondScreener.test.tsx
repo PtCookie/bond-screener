@@ -122,4 +122,42 @@ describe("BondScreener", () => {
 
     await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
   });
+
+  test("별로 북마크한 종목만 '북마크' 항목으로 모아 보고, 해제 칩으로 빠져나온다", async () => {
+    stubSnapshot(makeBonds());
+    const screen = await render(<BondScreener />);
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
+
+    const star = screen.getByRole("button", { name: "유일채권1 북마크", exact: true });
+    await userEvent.click(star);
+    await expect.element(star).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "유일채권2 북마크", exact: true }));
+
+    await userEvent.click(screen.getByRole("button", { name: /저장된 필터/ }));
+    const popoverContent = document.querySelector('[data-slot="popover-content"]');
+    if (!popoverContent) throw new Error("팝오버 콘텐츠를 찾지 못했습니다");
+    await userEvent.click(page.elementLocator(popoverContent).getByRole("button", { name: "북마크 (2)" }));
+
+    await expect.element(screen.getByText("2건 / 전체 30건")).toBeInTheDocument();
+
+    // 보기 중에 별을 끄면 그 행이 곧바로 빠진다.
+    await userEvent.click(screen.getByRole("button", { name: "유일채권1 북마크", exact: true }));
+    await expect.element(screen.getByText("1건 / 전체 30건")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "북마크 보기 해제" }));
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
+  });
+
+  test("북마크가 없을 때 북마크 보기는 전용 안내 문구를 보여준다", async () => {
+    stubSnapshot(makeBonds());
+    const screen = await render(<BondScreener />);
+    await expect.element(screen.getByText("30건", { exact: true })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /저장된 필터/ }));
+    const popoverContent = document.querySelector('[data-slot="popover-content"]');
+    if (!popoverContent) throw new Error("팝오버 콘텐츠를 찾지 못했습니다");
+    await userEvent.click(page.elementLocator(popoverContent).getByRole("button", { name: "북마크 (0)" }));
+
+    await expect.element(screen.getByText("북마크한 채권이 없습니다.")).toBeInTheDocument();
+  });
 });

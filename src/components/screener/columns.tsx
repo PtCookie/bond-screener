@@ -8,6 +8,7 @@ import {
   type Row,
   type SortFn,
 } from "@tanstack/react-table";
+import { BookmarkButton } from "@/components/common/BookmarkButton";
 import { Badge } from "@/components/ui/badge";
 import { compareGrade, fmtAmount, fmtDelta, fmtPrice, fmtRate, fmtYmd, deltaTone, DASH } from "@/lib/screener/format";
 import type { ScreenerRow } from "@/lib/screener/types";
@@ -64,16 +65,24 @@ const helper = createColumnHelper<Features, ScreenerRow>();
 export const screenerColumns = helper.columns([
   helper.accessor("isinCdNm", {
     header: "종목명",
+    // 별은 별도 컬럼이 아니라 이 셀 안에 둔다 — sticky 1열과 모바일 이름 행(종목당 1행째)이
+    // 따로 손대지 않아도 따라오고, 정렬 컬럼 화이트리스트·모바일 컬럼 순서도 그대로다.
+    // 링크는 flex-1로 남는 폭을 다 채운다 — 모바일 이름 행에는 오버레이 링크가 없어서,
+    // 링크가 글자 폭으로 줄면 행의 빈 곳을 눌러도 이동하지 않는다.
     cell: (c) => {
       const v = c.getValue();
+      const { isinCd } = c.row.original;
       return (
-        <a
-          href={`/bond/${c.row.original.isinCd}`}
-          className="text-link block truncate underline-offset-4 hover:underline"
-          title={v ?? undefined}
-        >
-          {v ?? DASH}
-        </a>
+        <div className="-ml-1.5 flex min-w-0 items-center gap-0.5">
+          <BookmarkButton isinCd={isinCd} name={v} />
+          <a
+            href={`/bond/${isinCd}`}
+            className="text-link min-w-0 flex-1 truncate underline-offset-4 hover:underline"
+            title={v ?? undefined}
+          >
+            {v ?? DASH}
+          </a>
+        </div>
       );
     },
     meta: { width: 16 },

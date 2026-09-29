@@ -16,6 +16,7 @@ import {
   normalizePresetName,
   parsePresets,
   removePreset,
+  sanitizePresets,
   serializePresets,
   upsertPreset,
   type FilterPreset,
@@ -167,5 +168,28 @@ describe("parsePresets", () => {
   test("MAX_PRESETS를 넘게 저장돼 있어도 상한까지만 읽는다", () => {
     const many = Array.from({ length: MAX_PRESETS + 5 }, (_, i) => makePreset({ name: `p${i}` }));
     expect(parsePresets(serializePresets(many))).toHaveLength(MAX_PRESETS);
+  });
+});
+
+// export/import가 재사용할 검증 — 봉투 없이 이미 파싱된 값을 받는다.
+describe("sanitizePresets", () => {
+  test("배열이 아니면 빈 목록", () => {
+    expect(sanitizePresets({ presets: [] })).toEqual([]);
+    expect(sanitizePresets(null)).toEqual([]);
+  });
+
+  test("깨진 항목만 버리고 MAX_PRESETS로 자른다", () => {
+    const valid = makePreset();
+    expect(sanitizePresets([valid, { id: "", name: "x", query: "", createdAt: 1 }, 3])).toEqual([valid]);
+    const many = Array.from({ length: MAX_PRESETS + 3 }, () => makePreset());
+    expect(sanitizePresets(many)).toHaveLength(MAX_PRESETS);
+  });
+});
+
+describe("북마크 보기와 프리셋", () => {
+  test("프리셋 쿼리에는 bookmarked가 실리지 않는다", () => {
+    const query = encodePresetQuery({ filters: EMPTY_FILTERS, sorting: DEFAULT_VIEW_STATE.sorting });
+    expect(query).not.toContain("bookmarked");
+    expect(Object.keys(decodePresetQuery("bookmarked=1&q=a")).sort()).toEqual(["filters", "sorting"]);
   });
 });
