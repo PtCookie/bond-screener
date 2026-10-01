@@ -47,6 +47,19 @@ export const SNAPSHOT_MAX_ATTEMPTS = 3;
 export const EMPTY_RETRY_BACKOFF_MS = 15 * 60_000;
 
 /**
+ * 과거 basDt의 `empty` 시세 run을 다시 확인하기까지 기다리는 시간(ms)과 되돌아볼 기간(일).
+ *
+ * 오늘 대상 basDt만 재시도하면, 그날 cron 창(5시간)이 닫힐 때까지 데이터가 안 나온 basDt는
+ * 다음 영업일부터 영영 다시 조회되지 않는다(2026-09-23분 시세 328건이 이렇게 누락됐다 —
+ * 오픈API에는 뒤늦게 반영됐지만 `empty`로 마감된 채 방치). 그래서 `lookback` 안의 `empty`
+ * 시세 run을 오래 확인 안 한 순서로 한 번씩 다시 본다. 휴장일은 영원히 `empty`이므로 백오프를
+ * 오늘분(15분)보다 훨씬 길게 잡아 하루 창에 휴장일당 1~2회만 조회하게 하고, lookback을 넘기면
+ * 포기한다. 이 두 값이 휴장일 헛조회의 상한이다.
+ */
+export const PAST_EMPTY_RECHECK_BACKOFF_MS = 6 * 60 * 60_000;
+export const PAST_EMPTY_RECHECK_LOOKBACK_DAYS = 14;
+
+/**
  * `status='running'`인 run의 커서가 이만큼 진척 없이 멈춰 있으면 `planTick`이 그 run을
  * 포기(`failed` 마감)하고 오늘 일을 새로 계획한다.
  *

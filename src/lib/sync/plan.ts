@@ -4,6 +4,7 @@
  *
  * 우선순위: 진행 중인 run이 있으면 무조건 이어서 처리(단 커서가 `STALE_RUNNING_RUN_MS`만큼
  * 멈춰 있으면 포기) → 시세(짧음)를 항상 기본정보보다 먼저(둘 다 이제 매 영업일 수집)
+ * → 과거에 `empty`로 끝난 시세 basDt 재확인(지연 반영분 회수)
  * → 기본정보가 오늘 대상 basDt로 끝났으면, base 재빌드
  * 요일(또는 base가 아예 없으면)엔 전량 재빌드(snapshot), 그 외 평일엔 그날 변경분만 담은
  * bond 델타(bondDelta) — base(3MB대, immutable 캐시)를 매일 무효화하지 않기 위한
@@ -12,6 +13,7 @@
 import type { SyncRun, SyncSource } from "@/lib/d1/sync-run-repo";
 import {
   EMPTY_RETRY_BACKOFF_MS,
+  PAST_EMPTY_RECHECK_BACKOFF_MS,
   SNAPSHOT_MAX_ATTEMPTS,
   SNAPSHOT_REBUILD_WEEKDAY_KST,
   STALE_RUNNING_RUN_MS,
@@ -40,6 +42,11 @@ export interface PlanTickInput {
   priceRunToday: SyncRun | null;
   /** 오늘 대상 basDt의 기본정보 run(없으면 아직 시작 전). 2026-09부터 매 영업일 수집한다. */
   issuRunToday: SyncRun | null;
+  /**
+   * 오늘 이전 basDt 중 `empty`로 마감된 시세 run 하나(가장 오래 확인 안 한 것, lookback 이내).
+   * 지연 반영된 과거분을 주워 담기 위한 입력이다 — `config.ts`의 `PAST_EMPTY_RECHECK_*` 참고.
+   */
+  pastEmptyPriceRun: SyncRun | null;
   /** `app_meta`에 기록된, 마지막으로 성공한 base 스냅샷 재빌드의 basDt. 없으면 `null`. */
   snapshotBasDt: number | null;
   /** 현재 대상 basDt에 대한 base 재빌드 실패 누적(`app_meta`). 없으면 `null`(=0회). */
@@ -76,6 +83,7 @@ export function planTick(input: PlanTickInput): SyncAction {
     runningRun,
     priceRunToday,
     issuRunToday,
+    pastEmptyPriceRun,
     snapshotBasDt,
     snapshotAttempts,
     bondDeltaBasDt,
@@ -101,6 +109,15 @@ export function planTick(input: PlanTickInput): SyncAction {
 
   if (shouldStart(issuRunToday, now)) {
     return { kind: "start", source: "issu", basDt: targetBasDt };
+  }
+
+  // 오늘 일(시세·기본정보 시작)이 모두 정리된 뒤에만 과거 `empty` 시세를 다시 본다 — 오늘분이
+  // 늘 우선이고, 이 분기는 스냅샷 빌드보다 앞서 늦게 반영된 날을 D1에 먼저 채운다.
+  if (
+    pastEmptyPriceRun &&
+    now.getTime() - (pastEmptyPriceRun.finished_at ?? pastEmptyPriceRun.updated_at) >= PAST_EMPTY_RECHECK_BACKOFF_MS
+  ) {
+    return { kind: "start", source: "price", basDt: pastEmptyPriceRun.bas_dt };
   }
 
   if (issuRunToday?.status === "done") {

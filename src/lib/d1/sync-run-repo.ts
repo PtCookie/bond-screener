@@ -33,6 +33,29 @@ export async function getRunningSyncRun(db: D1Database): Promise<SyncRun | null>
 }
 
 /**
+ * `sinceBasDt` 이상·`beforeBasDt` 미만의 `empty`/`failed` 시세 run 중 **가장 오래 확인하지 않은** 것
+ * 하나. 오늘 대상 basDt는 `planTick`이 따로 다루므로 `beforeBasDt`로 제외한다. 가장 최근이
+ * 아니라 가장 오래 안 본 것을 고르는 이유: 휴장일 run은 영원히 `empty`라 최근순으로 고르면
+ * 그 휴장일이 매번 앞자리를 차지해 그 뒤의 진짜 누락일을 가린다. `failed`를 포함하는 이유:
+ * 재확인 도중 일시 오류로 `empty`가 `failed`로 바뀌면(`price-sync.ts`) 복구 가능하던 날이
+ * 영구히 후보에서 빠지기 때문이다. `failed`는 `finished_at`이 NULL이라 `updated_at`으로 정렬된다.
+ */
+export async function getStalestPastEmptyPriceRun(
+  db: D1Database,
+  sinceBasDt: number,
+  beforeBasDt: number,
+): Promise<SyncRun | null> {
+  return db
+    .prepare(
+      `SELECT * FROM sync_run
+       WHERE source = 'price' AND status IN ('empty', 'failed') AND bas_dt >= ?1 AND bas_dt < ?2
+       ORDER BY COALESCE(finished_at, updated_at) ASC LIMIT 1`,
+    )
+    .bind(sinceBasDt, beforeBasDt)
+    .first<SyncRun>();
+}
+
+/**
  * `planTick`의 `start` 분기에서만 호출된다(resume은 이 함수를 거치지 않는다) — 즉 이전
  * 시도가 `empty`/`failed`로 끝난 뒤 같은 (source, bas_dt)를 처음부터 다시 도는 경우다.
  * 그래서 `ON CONFLICT`에서도 커서·누계·에러를 전부 리셋한다. 리셋하지 않으면 이전 시도의
