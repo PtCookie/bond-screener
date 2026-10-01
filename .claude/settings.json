@@ -30,6 +30,7 @@
       "allowedDomains": [
         "apis.data.go.kr",
         "api.cloudflare.com",
+        "*.r2.cloudflarestorage.com",
         "dash.cloudflare.com"
       ]
     },
