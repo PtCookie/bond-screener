@@ -5,6 +5,7 @@ import {
   failSyncRun,
   finishSyncRun,
   getRunningSyncRun,
+  getStalestPastEmptyPriceRun,
   getSyncRun,
   startSyncRun,
 } from "@/lib/d1/sync-run-repo";
@@ -165,5 +166,44 @@ describe("getRunningSyncRun", () => {
 
     const running = await getRunningSyncRun(env.DB);
     expect(running).toMatchObject({ source: "issu", bas_dt: 20260819, started_at: 1000 });
+  });
+});
+
+describe("getStalestPastEmptyPriceRun", () => {
+  async function seed(source: "price" | "issu", basDt: number, status: string, finishedAt: number) {
+    await env.DB.prepare(
+      `INSERT INTO sync_run (source, bas_dt, status, next_page, rows_seen, rows_written, attempt, started_at, updated_at, finished_at)
+       VALUES (?1, ?2, ?3, 2, 0, 0, 1, ?4, ?4, ?4)`,
+    )
+      .bind(source, basDt, status, finishedAt)
+      .run();
+  }
+
+  test("범위 안 empty 시세 run 중 가장 오래 확인 안 한 것을 고르고 오늘 이후·issu·done은 제외한다", async () => {
+    await seed("price", 20260820, "empty", 3000); // 범위 안, 최근 확인
+    await seed("price", 20260819, "empty", 1000); // 범위 안, 가장 오래 확인 안 함 → 선택
+    await seed("price", 20260810, "empty", 500); // lookback 밖
+    await seed("price", 20260821, "empty", 100); // 오늘 대상(beforeBasDt 제외)
+    await seed("price", 20260818, "done", 50); // done 제외
+    await seed("price", 20260817, "failed", 5000); // failed도 후보(재확인 중 일시 오류 구제)이나 더 최근 확인
+    await seed("issu", 20260817, "empty", 10); // issu 제외
+
+    const run = await getStalestPastEmptyPriceRun(env.DB, 20260815, 20260821);
+    expect(run?.bas_dt).toBe(20260819);
+  });
+
+  test("대상이 없으면 null", async () => {
+    expect(await getStalestPastEmptyPriceRun(env.DB, 20260815, 20260821)).toBeNull();
+  });
+});
+
+describe("getStalestPastEmptyPriceRun — failed", () => {
+  test("재확인 중 failed가 된 과거 run도 후보로 남는다", async () => {
+    await env.DB.prepare(
+      `INSERT INTO sync_run (source, bas_dt, status, next_page, rows_seen, rows_written, attempt, started_at, updated_at, error)
+       VALUES ('price', 20260819, 'failed', 1, 0, 0, 2, 1000, 2000, 'GW 5xx')`,
+    ).run();
+    const run = await getStalestPastEmptyPriceRun(env.DB, 20260815, 20260821);
+    expect(run?.bas_dt).toBe(20260819);
   });
 });

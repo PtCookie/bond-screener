@@ -10,6 +10,7 @@
 import {
   failSyncRun,
   getRunningSyncRun,
+  getStalestPastEmptyPriceRun,
   getSyncRun,
   startSyncRun,
   type SyncRun,
@@ -19,10 +20,15 @@ import { getAppMeta, setAppMeta } from "@/lib/d1/meta-repo";
 import { buildAndPutSnapshot } from "@/lib/snapshot/build";
 import { buildAndPutBondDelta } from "@/lib/snapshot/bond-delta";
 import { planTick, type AttemptCounter } from "./plan";
-import { previousBusinessDayKst } from "./dates";
+import { kstYmd, previousBusinessDayKst } from "./dates";
 import { runIssuSyncStep } from "./issu-sync";
 import { runPriceSyncStep } from "./price-sync";
-import { MAX_PAGES_PER_TICK, STALE_RUNNING_RUN_MS, TICK_WALL_BUDGET_MS } from "./config";
+import {
+  MAX_PAGES_PER_TICK,
+  PAST_EMPTY_RECHECK_LOOKBACK_DAYS,
+  STALE_RUNNING_RUN_MS,
+  TICK_WALL_BUDGET_MS,
+} from "./config";
 
 export interface SyncEnv {
   DB: D1Database;
@@ -53,6 +59,10 @@ export async function runSyncTick(env: SyncEnv, scheduledTime: number): Promise<
   const priceRunToday = runningRun?.source === "price" ? runningRun : await getSyncRun(env.DB, "price", targetBasDt);
   const issuRunToday = runningRun?.source === "issu" ? runningRun : await getSyncRun(env.DB, "issu", targetBasDt);
 
+  const lookbackStart = kstYmd(new Date(scheduledTime - PAST_EMPTY_RECHECK_LOOKBACK_DAYS * 24 * 60 * 60_000));
+  // running run이 있으면 planTick이 최상단에서 resume/abandon으로 끝내므로 이 조회는 쓸모가 없다.
+  const pastEmptyPriceRun = runningRun ? null : await getStalestPastEmptyPriceRun(env.DB, lookbackStart, targetBasDt);
+
   const snapshotBasDtRaw = await getAppMeta(env.DB, SNAPSHOT_BAS_DT_META_KEY);
   const snapshotBasDt = snapshotBasDtRaw === null ? null : Number(snapshotBasDtRaw);
   const snapshotAttempts = parseAttempts(await getAppMeta(env.DB, SNAPSHOT_ATTEMPTS_META_KEY));
@@ -66,6 +76,7 @@ export async function runSyncTick(env: SyncEnv, scheduledTime: number): Promise<
     runningRun,
     priceRunToday,
     issuRunToday,
+    pastEmptyPriceRun,
     snapshotBasDt,
     snapshotAttempts,
     bondDeltaBasDt,

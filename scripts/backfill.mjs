@@ -11,6 +11,10 @@
 //     --remote는 state.json에 적용 이력·일일 write 예산을 기록/체크한다(D1 free tier 한도 보호).
 //     --local은 그 한도가 없는 Miniflare SQLite라 상태를 읽지도 쓰지도 않고 매번 전체 청크를
 //     전량 적용한다(생성 SQL이 ON CONFLICT DO NOTHING이라 재실행해도 안전).
+//   node scripts/backfill.mjs fill-price-gaps --from Y [--to Y] [--remote|--local] [--apply]
+//     --from부터 평일마다 오픈API totalCount와 D1 bond_price 행 수를 대조해 빠진/모자란 날짜를
+//     찾는다(기본은 리포트만, --apply를 주면 그 날짜만 받아 적재). cron은 `empty`로 끝난 과거
+//     basDt를 다시 보지 않아 지연 반영된 날이 영구 누락될 수 있다 — 그 사후 복구용.
 //   node scripts/backfill.mjs status                          진행 상황 요약(원격 기준)
 //
 // fetch(네트워크·API 일일 쿼터)와 apply(D1 write 일일 한도)를 분리했다 — 한쪽이 한도에
@@ -593,6 +597,120 @@ function cmdApply(source, target, budget) {
 }
 
 // ---------------------------------------------------------------------------
+// fill-price-gaps — 오픈API 대비 D1 시세 누락일 탐지·보충
+// ---------------------------------------------------------------------------
+
+function queryD1(databaseName, target, sql) {
+  const output = execFileSync(
+    "pnpm",
+    [
+      "exec",
+      "wrangler",
+      "d1",
+      "execute",
+      databaseName,
+      `--${target}`,
+      "--config",
+      "./wrangler.jsonc",
+      "--command",
+      sql,
+      "--json",
+      "-y",
+    ],
+    { cwd: PROJECT_ROOT, encoding: "utf8", env: WRANGLER_ENV, maxBuffer: 64 * 1024 * 1024 },
+  );
+  return JSON.parse(output.slice(output.indexOf("[")))[0].results;
+}
+
+function* weekdaysBetween(fromYmd, toYmdInclusive) {
+  for (let d = toDate(fromYmd); toYmd(d) <= toYmdInclusive; d = addDays(d, 1)) {
+    const dow = d.getUTCDay();
+    if (dow !== 0 && dow !== 6) yield toYmd(d);
+  }
+}
+
+async function cmdFillPriceGaps(serviceKey, fromArg, toArg, target, apply) {
+  const from = fromArg;
+  const to = toArg ?? toYmd(addDays(new Date(), -1));
+  const databaseName = readDatabaseName();
+
+  const d1Counts = new Map(
+    queryD1(
+      databaseName,
+      target,
+      `SELECT bas_dt, COUNT(*) AS n FROM bond_price WHERE bas_dt >= ${Number(from)} AND bas_dt <= ${Number(to)} GROUP BY bas_dt`,
+    ).map((r) => [Number(r.bas_dt), Number(r.n)]),
+  );
+
+  const gaps = [];
+  for (const basDt of weekdaysBetween(from, to)) {
+    const page = await fetchPage(PRICE_BASE_URL, PRICE_OPERATION, { basDt, numOfRows: 1 }, serviceKey);
+    await sleep(MIN_CALL_INTERVAL_MS);
+    const have = d1Counts.get(basDt) ?? 0;
+    const status = page.totalCount === have ? "OK" : page.totalCount === 0 ? "API 0건(D1에만 있음)" : "불일치";
+    console.log(`  ${basDt}: API ${page.totalCount} / D1 ${have}  ${status}`);
+    if (page.totalCount > have) gaps.push({ basDt, apiCount: page.totalCount, have });
+  }
+
+  if (gaps.length === 0) {
+    console.log("\n누락 없음.");
+    return;
+  }
+  console.log(`\n누락/부족 ${gaps.length}일: ${gaps.map((g) => g.basDt).join(", ")}`);
+  if (!apply) {
+    console.log("--apply를 주면 이 날짜들을 받아 적재합니다.");
+    return;
+  }
+
+  const items = [];
+  for (const { basDt, apiCount } of gaps) {
+    let fetched = 0;
+    for (let pageNo = 1; fetched < apiCount; pageNo += 1) {
+      const page = await fetchPage(PRICE_BASE_URL, PRICE_OPERATION, { basDt, numOfRows: 10000, pageNo }, serviceKey);
+      await sleep(MIN_CALL_INTERVAL_MS);
+      if (page.items.length === 0) break;
+      items.push(...page.items);
+      fetched += page.items.length;
+    }
+    console.log(`  ${basDt}: ${fetched}/${apiCount}건 수집`);
+    if (fetched !== apiCount) throw new Error(`${basDt} 수집 건수 불일치 — 적재 중단`);
+  }
+
+  // 같은 SQL 생성기를 쓰므로 cron(`writeBondPricePage`)과 동일하게 NULL-only로 srtn_cd/itms_nm도 채운다.
+  // 단축코드 충돌 방어가 필요하므로 이미 D1이 같은 srtn_cd를 쓰는 종목은 빼야 하지만, 하루치
+  // 증분에서는 cron도 같은 조건으로 돌아가므로 여기서도 isin당 하나만 남긴다.
+  const insertRows = items.map(buildBondPriceRow);
+  const fillRows = [...new Map(items.map((i) => [i.isinCd, [i.isinCd, i.srtnCd, i.itmsNm]])).values()].filter(
+    ([isin, srtn]) => normText(isin) !== null && normText(srtn) !== null,
+  );
+  const sqlDir = path.join(SQL_DIR, `gap-${Date.now()}`);
+  const priceChunks = writeSqlChunks(
+    sqlDir,
+    "price",
+    (slice) =>
+      buildMultiValuesInsert("bond_price", BOND_PRICE_COLUMNS, slice, { conflictClause: "ON CONFLICT DO NOTHING" }),
+    insertRows,
+  );
+  for (const chunk of priceChunks) {
+    const written = executeSqlFile(databaseName, target, path.join(PROJECT_ROOT, chunk.file));
+    console.log(`적용: ${chunk.file} (${chunk.rows}행 선언 → 실제 write ${written ?? "n/a"})`);
+  }
+  console.log(`srtn 충전 후보 ${fillRows.length}건은 cron과 같은 NULL-only UPDATE로 적용합니다.`);
+  const fillChunks = writeSqlChunks(
+    sqlDir,
+    "srtn",
+    (slice) => buildBulkFillUpdate("bond", "isin_cd", ["srtn_cd", "itms_nm"], slice),
+    fillRows,
+    3,
+  );
+  for (const chunk of fillChunks) {
+    const written = executeSqlFile(databaseName, target, path.join(PROJECT_ROOT, chunk.file));
+    console.log(`적용: ${chunk.file} (${chunk.rows}행 선언 → 실제 write ${written ?? "n/a"})`);
+  }
+  console.log("\n완료. state.json 장부는 건드리지 않았습니다(소량 증분).");
+}
+
+// ---------------------------------------------------------------------------
 // status
 // ---------------------------------------------------------------------------
 
@@ -659,6 +777,7 @@ function usage() {
   node scripts/backfill.mjs apply --source issu|price|srtn [--remote|--local] [--budget 90000]
     --remote: state.json에 적용 이력·일일 write 예산을 기록/체크한다.
     --local:  상태를 읽지도 쓰지도 않고 매번 전체 청크를 전량 적용한다(--budget 무시).
+  node scripts/backfill.mjs fill-price-gaps --from YYYYMMDD [--to YYYYMMDD] --remote|--local [--apply]
   node scripts/backfill.mjs status`);
   process.exit(1);
 }
@@ -711,6 +830,19 @@ async function main() {
     }
     const budget = flags.budget ? Number(flags.budget) : 90_000;
     cmdApply(flags.source, target, budget);
+    return;
+  }
+
+  if (command === "fill-price-gaps") {
+    const target = flags.local ? "local" : flags.remote ? "remote" : null;
+    if (!target || !flags.from) usage();
+    await cmdFillPriceGaps(
+      loadServiceKey(),
+      Number(flags.from),
+      flags.to ? Number(flags.to) : undefined,
+      target,
+      Boolean(flags.apply),
+    );
     return;
   }
 

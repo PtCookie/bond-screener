@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import type { SyncRun } from "@/lib/d1/sync-run-repo";
-import { EMPTY_RETRY_BACKOFF_MS, STALE_RUNNING_RUN_MS } from "@/lib/sync/config";
+import { EMPTY_RETRY_BACKOFF_MS, PAST_EMPTY_RECHECK_BACKOFF_MS, STALE_RUNNING_RUN_MS } from "@/lib/sync/config";
 import { planTick, type PlanTickInput } from "@/lib/sync/plan";
 
 function run(overrides: Partial<SyncRun>): SyncRun {
@@ -27,6 +27,7 @@ function input(overrides: Partial<PlanTickInput> & Pick<PlanTickInput, "now">): 
     runningRun: null,
     priceRunToday: null,
     issuRunToday: null,
+    pastEmptyPriceRun: null,
     snapshotBasDt: null,
     snapshotAttempts: null,
     bondDeltaBasDt: null,
@@ -277,5 +278,49 @@ describe("planTick", () => {
       }),
     );
     expect(action).toEqual({ kind: "snapshot", basDt: 20260825 });
+  });
+});
+
+describe("planTick — 과거 empty 시세 재확인", () => {
+  // 오늘(월) 대상은 금요일 20260821. 시세·기본정보는 이미 done이라 오늘 일은 끝난 상태.
+  const todayDone = {
+    priceRunToday: run({ status: "done", bas_dt: 20260821 }),
+    issuRunToday: run({ source: "issu", status: "done", bas_dt: 20260821 }),
+    snapshotBasDt: 20260821,
+    bondDeltaBasDt: 20260821,
+  };
+
+  test("백오프가 지난 과거 empty 시세 run은 그 basDt로 다시 시작한다", () => {
+    const past = run({
+      status: "empty",
+      bas_dt: 20260819,
+      total_count: 0,
+      finished_at: MONDAY.getTime() - (PAST_EMPTY_RECHECK_BACKOFF_MS + 60_000),
+    });
+    expect(planTick(input({ now: MONDAY, ...todayDone, pastEmptyPriceRun: past }))).toEqual({
+      kind: "start",
+      source: "price",
+      basDt: 20260819,
+    });
+  });
+
+  test("백오프가 안 지났으면 재확인하지 않는다 (휴장일 헛조회 방지)", () => {
+    const past = run({
+      status: "empty",
+      bas_dt: 20260819,
+      total_count: 0,
+      finished_at: MONDAY.getTime() - 60_000,
+    });
+    expect(planTick(input({ now: MONDAY, ...todayDone, pastEmptyPriceRun: past }))).toEqual({ kind: "idle" });
+  });
+
+  test("오늘 시세가 아직 시작 전이면 오늘분이 과거분보다 먼저다", () => {
+    const past = run({
+      status: "empty",
+      bas_dt: 20260819,
+      finished_at: MONDAY.getTime() - (PAST_EMPTY_RECHECK_BACKOFF_MS + 60_000),
+    });
+    const action = planTick(input({ now: MONDAY, pastEmptyPriceRun: past }));
+    expect(action).toEqual({ kind: "start", source: "price", basDt: 20260821 });
   });
 });
