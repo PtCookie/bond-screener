@@ -3,6 +3,8 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
+    assignees:
+      - PtCookie
     schedule:
       interval: weekly
     commit-message:
@@ -27,6 +29,8 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
+    assignees:
+      - PtCookie
     schedule:
       interval: weekly
     commit-message:
