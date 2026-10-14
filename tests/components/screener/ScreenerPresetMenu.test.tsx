@@ -29,9 +29,20 @@ function renderMenu(overrides: Partial<React.ComponentProps<typeof ScreenerPrese
   );
 }
 
+function popoverContent() {
+  return document.querySelector('[data-slot="popover-content"]');
+}
+
+/**
+ * 팝오버는 닫힐 때 종료 애니메이션(`duration-100`)이 끝나야 DOM에서 사라진다. 기본 poll
+ * 타임아웃(1초)은 CI의 webkit처럼 느린 환경에서 모자라 간헐적으로 실패했다(`data-ending-style`
+ * 상태로 남은 채 타임아웃) — 같은 코드가 재실행에서는 통과했다.
+ */
+const POPOVER_CLOSE_POLL = { timeout: 5000 };
+
 /** 팝오버는 Portal로 body 직속에 렌더된다 — 트리거와 텍스트가 겹칠 수 있어 범위를 좁힌다. */
 function popover() {
-  const content = document.querySelector('[data-slot="popover-content"]');
+  const content = popoverContent();
   if (!content) throw new Error("팝오버 콘텐츠를 찾지 못했습니다");
   return page.elementLocator(content);
 }
@@ -56,7 +67,7 @@ describe("목록", () => {
     await userEvent.click(popover().getByRole("button", { name: "고금리", exact: true }));
 
     expect(onApply).toHaveBeenCalledExactlyOnceWith("srfcInrtMin=5");
-    await expect.poll(() => document.querySelector('[data-slot="popover-content"]')).toBeNull();
+    await expect.poll(popoverContent, POPOVER_CLOSE_POLL).toBeNull();
   });
 });
 
@@ -91,7 +102,7 @@ describe("북마크 고정 항목", () => {
 
     expect(onApplyBookmarks).toHaveBeenCalledOnce();
     expect(onApply).not.toHaveBeenCalled();
-    await expect.poll(() => document.querySelector('[data-slot="popover-content"]')).toBeNull();
+    await expect.poll(popoverContent, POPOVER_CLOSE_POLL).toBeNull();
   });
 });
 
