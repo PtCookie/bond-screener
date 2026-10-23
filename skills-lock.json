@@ -5,13 +5,13 @@
       "source": "tradingview/lightweight-charts",
       "sourceType": "github",
       "skillPath": ".github/skills/lightweight-charts/SKILL.md",
-      "computedHash": "4ce0d91803fcb28d70a4bd4d7335057b4eb13a6ff85e26c88cf5aa91b7acac8a"
+      "computedHash": "556e8b55913f51637d0c947175cf5ef102d3f291bf8e266d096eada6361f26c4"
     },
     "shadcn": {
       "source": "shadcn/ui",
       "sourceType": "github",
       "skillPath": "skills/shadcn/SKILL.md",
-      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
+      "computedHash": "b864a958765563321f485a96f4d59c0bb6539f4286ab6d8b8b66895b7ebd302d"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
@@ -35,7 +35,13 @@
       "source": "cloudflare/skills",
       "sourceType": "github",
       "skillPath": "skills/workers-best-practices/SKILL.md",
-      "computedHash": "61834fa098e16280aae54e584f5a16e047391790b1e1e4995c0e9a111d6d75c3"
+      "computedHash": "e12970301753ed7eaa5ca375d4b98e0e36c9554e8f2809cb4b543c2ea7d9b4b8"
+    },
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wrangler/SKILL.md",
+      "computedHash": "9b410cfe14c41d3d4ace5d42e2e19f4eb96104c659b5ed45abf341db28d81029"
     }
   }
 }
