@@ -9,6 +9,12 @@
 @import "@fontsource-variable/newsreader";
 @import "@fontsource-variable/newsreader/wght-italic.css";
 
+/* Tailwind는 .gitignore에 없는 파일을 전부 스캔한다. `.agents/`(에이전트 스킬 문서)에 예시로 적힌
+   유틸리티 클래스가 쓰이지도 않는데 빌드 CSS에 섞여 들어가므로 제외한다. `.claude/skills/*`는
+   `.agents/skills/*`를 가리키는 심볼릭 링크라 같은 문서가 그 경로로도 스캔되므로 함께 막는다. */
+@source not "../../.agents";
+@source not "../../.claude";
+
 /* `.dark`는 <html> 자신에 붙으므로(Layout.astro의 인라인 스크립트) 변형이 그 요소 자체와
    자손을 모두 매치해야 한다 — 기본형인 `.dark *`만 쓰면 <html>에 건 `dark:` 유틸리티가
    조용히 무시된다. 두 분기의 특정도가 같아 다른 규칙과의 우선순위는 달라지지 않는다. */
