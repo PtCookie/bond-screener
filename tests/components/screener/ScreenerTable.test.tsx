@@ -205,21 +205,23 @@ describe("ScreenerTable", () => {
 
   // sticky 1열은 뒤로 스크롤되는 다른 셀 위에 그려지므로 hover 여부와 무관하게 항상
   // 불투명해야 한다 — 반투명이면 뒤 셀 글자가 비쳐 보인다(실제로 있었던 버그).
-  // color-mix() 결과는 브라우저마다 computed value 직렬화가 달라(oklab()/rgb() 등)
-  // 문자열로 비교하지 않고, canvas에 칠해 alpha 채널만 측정한다.
+  // Patina Table 지침: hover 틴트는 불투명 배경색 위에 반투명 --muted-hover gradient를 얹어
+  // 표현하므로 background-color는 hover 전후로 같고(항상 불투명), 틴트는 background-image에
+  // 나타난다. oklch() 값은 브라우저마다 computed value 직렬화가 달라 문자열로 비교하지 않고,
+  // canvas에 칠해 alpha 채널만 측정한다.
   test("sticky 1열 셀 배경은 hover 상태에서도 불투명하다", async () => {
     await page.viewport(1200, 800);
     const screen = await render(<Harness rows={makeRows(1)} />);
     const cell = screen.container.querySelector("tbody tr td:first-child");
     if (!cell) throw new Error("첫 번째 셀을 찾지 못했습니다");
 
-    const before = getComputedStyle(cell).backgroundColor;
-    expect(alphaOf(before)).toBe(255);
+    expect(alphaOf(getComputedStyle(cell).backgroundColor)).toBe(255);
+    expect(getComputedStyle(cell).backgroundImage).toBe("none");
 
     await screen.getByText("테스트채권0").hover();
-    const after = getComputedStyle(cell).backgroundColor;
-    expect(alphaOf(after)).toBe(255);
-    expect(after).not.toBe(before); // hover 틴트가 실제로 적용됐는지도 함께 확인
+    expect(alphaOf(getComputedStyle(cell).backgroundColor)).toBe(255);
+    // hover 틴트가 실제로 적용됐는지도 함께 확인
+    expect(getComputedStyle(cell).backgroundImage).toContain("linear-gradient");
   });
 
   // ui-audit ⑫⑮: 종목명 링크가 일반 텍스트와 동일하게 렌더돼(색·밑줄·hover 전무)

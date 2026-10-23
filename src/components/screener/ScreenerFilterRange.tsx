@@ -147,7 +147,6 @@ export function ScreenerFilterRange({
           <ToggleGroup
             variant="outline"
             size="sm"
-            spacing={0}
             value={[unit]}
             // base-ui ToggleGroup은 단일 선택 모드에서도 값이 배열이다.
             onValueChange={(next) => {

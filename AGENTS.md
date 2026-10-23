@@ -59,7 +59,7 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 
 - **Astro v7** — page routing and static/server rendering (`output: "server"`)
 - **React 19** — interactive components as Astro Islands
-- **shadcn/ui** (built on `@base-ui/react`, Phosphor icons) — UI component library (`src/components/ui/`)
+- **Patina** (https://patina.ptcookie.net) — the owner's design system, delivered as a shadcn registry (`@base-ui/react`, Phosphor icons). `src/components/ui/` holds Patina components and `src/styles/global.css` holds its tokens — see "Design system (Patina)" below
 - **Tailwind v4** — via the `@tailwindcss/vite` plugin
 - **TanStack Query v5** (`@tanstack/react-query`) — client-side server-state management. `src/components/providers/QueryProvider.tsx` creates one `QueryClient` per island and wraps it (`BondScreener`/`BondDetail`), and `src/hooks/useScreenerData.ts`/`useBondPrices.ts` use it for snapshot and price time-series fetching respectively. `@tanstack/eslint-plugin-query` is wired into `eslint.config.ts`
 - **TanStack Table** (`@tanstack/react-table`) — powers the screener table's sorting/pagination (`src/components/screener/columns.tsx`, `ScreenerTable.tsx`, `ScreenerPagination.tsx`)
@@ -74,6 +74,21 @@ wrangler d1 execute bond-screener --remote --config ./wrangler.jsonc --command "
 ### Astro + React Islands
 
 `.astro` files are rendered on the server, and React is used via `client:*` directives only for components that need interactivity (e.g. `<BondTable client:load />`).
+
+### Design system (Patina)
+
+This project uses the Patina design system (`https://patina.ptcookie.net`). Before building or changing UI, read `https://patina.ptcookie.net/llms-full.txt` (or the index at `/llms.txt`).
+
+- Use colour only by semantic token name (`bg-background`, `text-muted-foreground`, `border-border`). Never write hex, `oklch()` or `rgb()` literals, Tailwind palette classes, `dark:` colour overrides or opacity modifiers on colours; never compute state colours with `color-mix()` — hover/tint states have their own tokens (`bg-muted-hover`, `bg-destructive-muted`, …).
+- Use Patina components: `pnpm dlx shadcn@latest add @patina/<name>` (the `@patina` namespace is registered in `components.json`). Install them before stock shadcn components; if the CLI asks to overwrite an existing file such as `button.tsx`, answer no and never pass `--overwrite`. Components import `cn` from the `cn` package — there is no `src/lib/utils.ts`.
+- One primary action per view. Destructive actions are tinted, not solid. Emerald text is `text-link`, not `text-primary`. Show status with an icon and a word.
+- If a design needs a value that has no token, say so; do not add a literal.
+- **Project exceptions:**
+  - UI copy is Korean, so Patina's "English, sentence case" rule does not apply (keep it short and verb-first).
+  - Three project-only tokens live in `global.css`: `--price-up: var(--destructive)` / `--price-down: var(--info)` (Korean market convention — up red, down blue; always shown with a +/- sign, so never colour alone) and `--bookmark` (amber star, own light/dark values). Everything else in `:root`/`.dark`/`@theme inline` is written by `shadcn init https://patina.ptcookie.net/r/base.json` — do not hand-edit those values; re-run init to pick up a new Patina snapshot.
+  - **After any `shadcn init`, check that `@custom-variant dark (&:is(.dark, .dark *));` survived** (see the Theme section) — the CLI writes the shorter `&:is(.dark *)` on a fresh setup.
+  - `CardTitle` carries a local `text-pretty` (avoids heading widows); re-add it if `card.tsx` is reinstalled.
+- Sticky table cells follow Patina's Table rule: opaque `bg-background` plus a `--muted-hover` gradient on row hover (`STICKY_FIRST_COL` in `ScreenerTable.tsx`), never the translucent row hover.
 
 ### Theme (dark mode)
 

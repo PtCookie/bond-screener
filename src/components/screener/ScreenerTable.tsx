@@ -25,10 +25,14 @@ interface ScreenerTableProps {
 
 /**
  * 1열(종목명)을 좌측 sticky로 고정 — 11컬럼 가로 스크롤에서 종목명이 사라지면 표를 읽을 수 없다.
- * 행 hover 틴트(TableRow의 hover:bg-muted/50)는 반투명이라 sticky 셀에 그대로 쓰면 뒤로
- * 스크롤되는 다른 셀이 비친다 — bg-row-hover(불투명, muted를 background와 미리 합성한 값)로 대신 칠한다.
+ * 행 hover 틴트(TableRow의 hover:bg-muted-hover)는 반투명이라 sticky 셀에 그대로 쓰면 뒤로
+ * 스크롤되는 다른 셀이 비친다 — Patina Table 지침대로 불투명한 bg-background 위에 같은 토큰을
+ * gradient로 한 겹 얹는다. 행이 페이지 배경 위에 칠하는 합성과 같은 연산이라 다른 셀과 색이 정확히
+ * 같다. background-image는 보간되지 않으므로 transition-colors는 두지 않는다(행 나머지는 150ms
+ * 페이드, 이 셀은 즉시 — 감수한 차이).
  */
-const STICKY_FIRST_COL = "group-hover/row:bg-row-hover sticky left-0 z-10 bg-background transition-colors";
+const STICKY_FIRST_COL =
+  "sticky left-0 z-10 bg-background group-hover/row:bg-[linear-gradient(var(--muted-hover),var(--muted-hover))]";
 
 /** 헤더용 sticky 1열 — 본문과 달리 행 hover 배경 동기화가 필요 없다(헤더에 그런 hover 상태가 없음). */
 const STICKY_FIRST_COL_HEADER = "sticky left-0 z-10 bg-background";
@@ -301,7 +305,7 @@ function MobileTable({
             const [nameCell, ...rawDataCells] = row.getAllCells();
             const dataCells = orderForMobile(rawDataCells);
             return [
-              <TableRow key={`${row.id}-name`} className={cn("hover:bg-muted/50 cursor-pointer", "border-b-0")}>
+              <TableRow key={`${row.id}-name`} className="cursor-pointer border-b-0">
                 <TableCell colSpan={dataColCount} className="pb-1">
                   {nameCell && (
                     <div className={cn("sticky left-0 font-medium", MOBILE_NAME_MAX_WIDTH)}>
@@ -310,7 +314,7 @@ function MobileTable({
                   )}
                 </TableCell>
               </TableRow>,
-              <TableRow key={`${row.id}-data`} className="hover:bg-muted/50 cursor-pointer">
+              <TableRow key={`${row.id}-data`} className="cursor-pointer">
                 {dataCells.map((cell) => (
                   <TableCell
                     key={cell.id}
