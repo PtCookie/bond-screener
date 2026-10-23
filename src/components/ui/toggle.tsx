@@ -1,37 +1,51 @@
-"use client";
-
 import { Toggle as TogglePrimitive } from "@base-ui/react/toggle";
 import { cva, type VariantProps } from "class-variance-authority";
+
 import { cn } from "cn";
 
+// A two-state button: off is transparent with `muted-foreground` content, on fills `muted` with `foreground`.
+// `grouped` is set by ToggleGroup: items share hairlines and only the outer corners are rounded.
 const toggleVariants = cva(
-  "group/toggle hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/30 aria-invalid:border-destructive aria-invalid:ring-destructive/20 aria-pressed:bg-muted dark:aria-invalid:ring-destructive/40 inline-flex items-center justify-center gap-1 rounded-3xl text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "text-muted-foreground hover:bg-muted-hover hover:text-foreground focus-visible:outline-ring aria-pressed:bg-muted aria-pressed:text-foreground inline-flex cursor-pointer items-center justify-center gap-2 border font-medium whitespace-nowrap transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-transparent",
-        outline: "border-input hover:bg-muted border bg-transparent",
+        default: "border-transparent bg-transparent",
+        outline: "border-input bg-transparent",
       },
       size: {
-        default: "h-9 min-w-9 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
-        sm: "h-8 min-w-8 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        lg: "h-10 min-w-10 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        default: "h-(--control-md) min-w-(--control-md) px-3 text-sm",
+        sm: "h-(--control-sm) min-w-(--control-sm) px-3 text-sm",
+        lg: "h-(--control-lg) min-w-(--control-lg) px-4 text-sm",
+      },
+      grouped: {
+        false: "rounded-lg",
+        true: "rounded-none not-first:-ml-px first:rounded-l-lg last:rounded-r-lg focus-visible:z-10",
       },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
+      grouped: false,
     },
   },
 );
 
 function Toggle({
   className,
-  variant = "default",
-  size = "default",
+  variant,
+  size,
+  grouped,
   ...props
 }: TogglePrimitive.Props & VariantProps<typeof toggleVariants>) {
-  return <TogglePrimitive data-slot="toggle" className={cn(toggleVariants({ variant, size, className }))} {...props} />;
+  return (
+    <TogglePrimitive
+      data-slot="toggle"
+      data-testid="toggle"
+      className={cn(toggleVariants({ variant, size, grouped, className }))}
+      {...props}
+    />
+  );
 }
 
 export { Toggle, toggleVariants };
